@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+
+{% block title %}Crypto - Trading Bot{% endblock %}
+{% block page_title %}Crypto Markets{% endblock %}
+
+{% block content %}
+<div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-currency-bitcoin me-2"></i>Tracked Coins</h5>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadPrices()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Coin</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Technical</th>
+                        <th class="text-end">Sentiment</th>
+                        <th class="text-center">Signal</th>
+                    </tr>
+                </thead>
+                <tbody id="pricesTable">
+                    <tr>
+                        <td colspan="5" class="text-center text-muted py-4">
+                            <div class="spinner-border spinner-border-sm me-2"></div>
+                            Loading prices...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-lightning me-2"></i>Recent Crypto Signals</h5>
+        <a href="/signals" class="btn btn-sm btn-outline-primary">View All</a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Coin</th>
+                        <th class="text-center">Signal</th>
+                        <th class="text-end">Score</th>
+                        <th class="text-end">Entry</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="signalsTable">
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <div class="spinner-border spinner-border-sm me-2"></div>
+                            Loading signals...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        loadPrices();
+        loadSignals();
+        setInterval(() => { loadPrices(); loadSignals(); }, 30000);
+    });
+
+    async function loadPrices() {
+        try {
+            const [pricesData, coinsData, signalsData] = await Promise.all([
+                fetchAPI('/api/prices'),
+                fetchAPI('/api/coins'),
+                fetchAPI('/api/signals?asset_type=crypto')
+            ]);
+
+            const prices = pricesData.prices;
+            const coins = coinsData.coins.filter(c => c.tradeable);
+            const signals = signalsData.signals || [];
+
+            const latestSignals = {};
+            for (const sig of signals) {
+                if (!latestSignals[sig.symbol]) latestSignals[sig.symbol] = sig;
+            }
+
+            let html = '';
+            for (const coin of coins) {
+                const price = prices[coin.symbol] || 0;
+                const sig = latestSignals[coin.symbol];
+                const tech = sig ? sig.technical_score.toFixed(2) : '--';
+                const sent = sig ? sig.sentiment_score.toFixed(2) : '--';
+                const signalType = sig ? sig.type : 'hold';
+                const signalClass = signalType === 'buy' ? 'bg-success'
+                                  : signalType === 'sell' ? 'bg-danger' : 'bg-secondary';
+                html += `
+                    <tr>
+                        <td>
+                            <strong>${coin.symbol}</strong>
+                            <small class="text-muted d-block">${coin.name}</small>
+                        </td>
+                        <td class="text-end">${formatCurrency(price)}</td>
+                        <td class="text-end">${tech}</td>
+                        <td class="text-end">${sent}</td>
+                        <td class="text-center"><span class="badge ${signalClass}">${signalType.toUpperCase()}</span></td>
+                    </tr>`;
+            }
+            document.getElementById('pricesTable').innerHTML = html ||
+                '<tr><td colspan="5" class="text-center text-muted">No data</td></tr>';
+        } catch (error) { console.error('Error loading prices:', error); }
+    }
+
+    async function loadSignals() {
+        try {
+            const data = await fetchAPI('/api/signals?asset_type=crypto');
+            const signals = (data.signals || []).slice(0, 10);
+            let html = '';
+            for (const sig of signals) {
+                const time = new Date(sig.timestamp).toLocaleTimeString();
+                const sigClass = sig.type === 'buy' ? 'bg-success' : sig.type === 'sell' ? 'bg-danger' : 'bg-secondary';
+                const status = sig.executed
+                    ? '<span class="badge bg-primary">Executed</span>'
+                    : '<span class="badge bg-secondary">Pending</span>';
+                html += `
+                    <tr>
+                        <td><small>${time}</small></td>
+                        <td><strong>${sig.symbol}</strong></td>
+                        <td class="text-center"><span class="badge ${sigClass}">${sig.type.toUpperCase()}</span></td>
+                        <td class="text-end">${sig.combined_score.toFixed(3)}</td>
+                        <td class="text-end">${sig.entry_price ? formatCurrency(sig.entry_price) : '--'}</td>
+                        <td class="text-center">${status}</td>
+                    </tr>`;
+            }
+            document.getElementById('signalsTable').innerHTML = html ||
+                '<tr><td colspan="6" class="text-center text-muted py-3">No crypto signals yet</td></tr>';
+        } catch (error) { console.error('Error loading signals:', error); }
+    }
+</script>
+{% endblock %}

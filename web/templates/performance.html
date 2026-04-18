@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block title %}Performance - Trading Bot{% endblock %}
+{% block page_title %}Performance{% endblock %}
+
+{% block content %}
+<!-- Metric cards -->
+<div class="row g-3 mb-3">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="stat-label">Total Return</p>
+                <h3 class="stat-value" id="metricTotalReturn">--</h3>
+                <small class="text-muted" id="metricRange">—</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="stat-label">CAGR</p>
+                <h3 class="stat-value" id="metricCagr">--</h3>
+                <small class="text-muted">annualized</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="stat-label">Max Drawdown</p>
+                <h3 class="stat-value text-danger" id="metricMaxDd">--</h3>
+                <small class="text-muted">peak-to-trough</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="stat-label">Sharpe Ratio</p>
+                <h3 class="stat-value" id="metricSharpe">--</h3>
+                <small class="text-muted">4% risk-free</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Chart -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h5 class="mb-0"><i class="bi bi-bar-chart-line me-2"></i>Portfolio vs. Benchmarks</h5>
+        <div class="btn-group btn-group-sm" id="rangeGroup" role="group">
+            <button type="button" class="btn btn-outline-secondary" data-days="7">7D</button>
+            <button type="button" class="btn btn-outline-secondary active" data-days="30">30D</button>
+            <button type="button" class="btn btn-outline-secondary" data-days="90">90D</button>
+            <button type="button" class="btn btn-outline-secondary" data-days="180">180D</button>
+            <button type="button" class="btn btn-outline-secondary" data-days="365">1Y</button>
+            <button type="button" class="btn btn-outline-secondary" data-days="3650">All</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <div id="perfStatus" class="text-center text-muted py-4">
+            <div class="spinner-border spinner-border-sm me-2"></div>Loading...
+        </div>
+        <canvas id="perfCanvas" height="120" class="d-none"></canvas>
+    </div>
+</div>
+
+<div class="mt-3 text-muted">
+    <small>
+        <i class="bi bi-info-circle"></i>
+        Each series is normalized to % return from its first data point in the selected window.
+        Portfolio snapshots are written each trading cycle. Benchmarks are daily closes from yfinance.
+    </small>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let perfChart = null;
+    const COLORS = {
+        portfolio:        '#0dcaf0',
+        'SPY':            '#6c757d',
+        'QQQ':            '#a78bfa',
+        'BTC':            '#f7931a',
+        '60/40 SPY+BTC':  '#198754',
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadPerformance(30);
+        document.querySelectorAll('#rangeGroup button').forEach(btn => {
+            btn.addEventListener('click', function() {
+                document.querySelectorAll('#rangeGroup button').forEach(b => b.classList.remove('active'));
+                this.classList.add('active');
+                loadPerformance(parseInt(this.dataset.days));
+            });
+        });
+    });
+
+    async function loadPerformance(days) {
+        const statusEl = document.getElementById('perfStatus');
+        const canvas = document.getElementById('perfCanvas');
+        statusEl.classList.remove('d-none');
+        statusEl.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Loading...';
+        canvas.classList.add('d-none');
+
+        try {
+            const data = await fetchAPI(`/api/performance/series?days=${days}`);
+
+            // Metrics
+            const m = data.metrics || {};
+            setPctValue('metricTotalReturn', m.total_return_pct);
+            setPctValue('metricCagr', m.cagr_pct);
+            setPctValue('metricMaxDd', m.max_drawdown_pct, true);
+            document.getElementById('metricSharpe').textContent =
+                (m.sharpe === null || m.sharpe === undefined) ? '--' : m.sharpe.toFixed(2);
+            document.getElementById('metricRange').textContent =
+                (m.start_date && m.end_date) ? `${m.start_date} → ${m.end_date}` : '—';
+
+            if (!data.portfolio || data.portfolio.length === 0) {
+                statusEl.innerHTML = 'No portfolio snapshots yet. Wait for the next trading cycle.';
+                return;
+            }
+
+            // Build datasets: portfolio first, then each benchmark
+            const datasets = [{
+                label: 'Portfolio',
+                data: data.portfolio.map(p => ({ x: p.date, y: p.pct })),
+                borderColor: COLORS.portfolio,
+                backgroundColor: 'rgba(13, 202, 240, 0.1)',
+                borderWidth: 2.5,
+                tension: 0.15,
+                fill: true,
+                pointRadius: 0,
+                pointHoverRadius: 4,
+            }];
+            for (const [label, pts] of Object.entries(data.benchmarks || {})) {
+                datasets.push({
+                    label,
+                    data: pts.map(p => ({ x: p.date, y: p.pct })),
+                    borderColor: COLORS[label] || '#adb5bd',
+                    borderWidth: 1.5,
+                    tension: 0.15,
+                    fill: false,
+                    pointRadius: 0,
+                    pointHoverRadius: 3,
+                    borderDash: [4, 3],
+                });
+            }
+
+            statusEl.classList.add('d-none');
+            canvas.classList.remove('d-none');
+
+            if (perfChart) perfChart.destroy();
+            perfChart = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}%`,
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { type: 'category', ticks: { maxTicksLimit: 10 } },
+                        y: { ticks: { callback: v => v.toFixed(1) + '%' } },
+                    },
+                },
+            });
+        } catch (error) {
+            statusEl.innerHTML = `<span class="text-danger">Failed to load performance: ${error.message || error}</span>`;
+        }
+    }
+
+    function setPctValue(id, value, negativeIsGood=false) {
+        const el = document.getElementById(id);
+        if (value === null || value === undefined || Number.isNaN(value)) {
+            el.textContent = '--';
+            el.className = 'stat-value';
+            return;
+        }
+        const sign = value >= 0 ? '+' : '';
+        el.textContent = `${sign}${value.toFixed(2)}%`;
+        // negativeIsGood=true means the label is something like Max Drawdown where 0 is best
+        if (!negativeIsGood) {
+            el.className = 'stat-value ' + (value >= 0 ? 'text-success' : 'text-danger');
+        }
+    }
+</script>
+{% endblock %}

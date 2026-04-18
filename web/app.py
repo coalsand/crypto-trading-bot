@@ -127,6 +127,18 @@ def stocks_page():
     return render_template("stocks.html")
 
 
+@app.route("/crypto")
+def crypto_page():
+    """Crypto markets page."""
+    return render_template("crypto.html")
+
+
+@app.route("/performance")
+def performance_page():
+    """Performance vs benchmarks."""
+    return render_template("performance.html")
+
+
 # ============================================
 # API Routes
 # ============================================
@@ -418,6 +430,126 @@ def api_ohlcv(symbol: str):
 
     except Exception as e:
         logger.error(f"Error fetching OHLCV for {symbol}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/performance/series")
+def api_performance_series():
+    """
+    Time-series of portfolio value vs. benchmarks, normalized to % return since start.
+
+    Query params:
+      days (int, default 30): lookback window
+    """
+    try:
+        import pandas as pd
+        from datetime import timedelta
+        from ..data import stock_data
+
+        days = int(request.args.get("days", 30))
+
+        snapshots = db.get_portfolio_history(days=days, is_paper=True)
+        if not snapshots:
+            return jsonify({"portfolio": [], "benchmarks": {}, "days": days})
+
+        # Build portfolio series: [{date, value}]
+        port_series = [
+            {"date": s.timestamp.strftime("%Y-%m-%d"), "value": float(s.total_value_usd)}
+            for s in snapshots
+        ]
+        port_start = port_series[0]["value"] or 1.0
+
+        # Fetch benchmark bars covering the same date span
+        start_dt = snapshots[0].timestamp.date()
+        end_dt = snapshots[-1].timestamp.date() + timedelta(days=1)
+        period = f"{max(days + 5, 7)}d"
+
+        benchmark_tickers = {"SPY": "SPY", "QQQ": "QQQ", "BTC": "BTC-USD"}
+        benchmarks = {}
+        raw = {}
+        for label, ticker in benchmark_tickers.items():
+            df = stock_data.fetch_ohlcv(ticker, period=period, interval="1d")
+            if df is None or df.empty:
+                continue
+            df = df.copy()
+            df.index = pd.to_datetime(df.index).tz_localize(None).normalize()
+            df = df[(df.index.date >= start_dt) & (df.index.date <= end_dt)]
+            if df.empty:
+                continue
+            raw[label] = df
+
+        # Normalize each series to % return from its first value
+        def to_pct(series_vals):
+            base = series_vals[0]
+            return [((v / base) - 1.0) * 100 for v in series_vals]
+
+        portfolio_pct = [{"date": p["date"], "pct": v}
+                         for p, v in zip(port_series, to_pct([p["value"] for p in port_series]))]
+
+        for label, df in raw.items():
+            benchmarks[label] = [
+                {"date": idx.strftime("%Y-%m-%d"), "pct": pct}
+                for idx, pct in zip(df.index, to_pct(df["close"].tolist()))
+            ]
+
+        # 60/40 blend: 60% SPY, 40% BTC, computed daily on common dates
+        if "SPY" in raw and "BTC" in raw:
+            common = raw["SPY"].index.intersection(raw["BTC"].index)
+            if len(common) > 1:
+                spy = raw["SPY"].loc[common, "close"].tolist()
+                btc = raw["BTC"].loc[common, "close"].tolist()
+                spy_pct = to_pct(spy)
+                btc_pct = to_pct(btc)
+                blend = [0.6 * s + 0.4 * b for s, b in zip(spy_pct, btc_pct)]
+                benchmarks["60/40 SPY+BTC"] = [
+                    {"date": idx.strftime("%Y-%m-%d"), "pct": v}
+                    for idx, v in zip(common, blend)
+                ]
+
+        # Metrics (portfolio-only for v1)
+        values = [p["value"] for p in port_series]
+        total_return_pct = ((values[-1] / values[0]) - 1.0) * 100 if values[0] else 0.0
+        years = max((snapshots[-1].timestamp - snapshots[0].timestamp).total_seconds() / (365.25 * 86400), 1e-9)
+        cagr_pct = ((values[-1] / values[0]) ** (1.0 / years) - 1.0) * 100 if values[0] else 0.0
+
+        # Max drawdown
+        peak = values[0]
+        max_dd = 0.0
+        for v in values:
+            if v > peak:
+                peak = v
+            dd = (v / peak - 1.0) * 100
+            if dd < max_dd:
+                max_dd = dd
+
+        # Daily Sharpe (resample to daily, assume 4% risk-free)
+        sharpe = None
+        if len(values) > 2:
+            s = pd.Series(values, index=pd.to_datetime([p["date"] for p in port_series]))
+            daily = s.resample("1D").last().ffill().dropna()
+            if len(daily) > 2:
+                rets = daily.pct_change().dropna()
+                if rets.std() and rets.std() > 0:
+                    rf_daily = 0.04 / 252
+                    sharpe = float((rets.mean() - rf_daily) / rets.std() * (252 ** 0.5))
+
+        return jsonify({
+            "days": days,
+            "portfolio": portfolio_pct,
+            "benchmarks": benchmarks,
+            "metrics": {
+                "total_return_pct": total_return_pct,
+                "cagr_pct": cagr_pct,
+                "max_drawdown_pct": max_dd,
+                "sharpe": sharpe,
+                "start_date": port_series[0]["date"],
+                "end_date": port_series[-1]["date"],
+                "start_value": port_series[0]["value"],
+                "end_value": port_series[-1]["value"],
+            },
+        })
+    except Exception as e:
+        logger.exception(f"performance series error: {e}")
         return jsonify({"error": str(e)}), 500
 
 
