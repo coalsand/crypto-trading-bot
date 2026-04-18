@@ -300,7 +300,7 @@ class TradingBot:
             IntervalTrigger(minutes=settings.scheduler.signal_check_interval_minutes),
             id="trading_cycle",
             name="Trading Cycle",
-            next_run_time=datetime.utcnow()  # Run immediately on start
+            next_run_time=datetime.now()  # Run immediately on start (APScheduler uses local time)
         )
 
         # Schedule sentiment update (less frequent)
@@ -309,7 +309,7 @@ class TradingBot:
             IntervalTrigger(minutes=settings.scheduler.sentiment_update_interval_minutes),
             id="sentiment_update",
             name="Sentiment Update",
-            next_run_time=datetime.utcnow()  # Run immediately on start
+            next_run_time=datetime.now()  # Run immediately on start
         )
 
         # Schedule stock screener (daily refresh of the active list)
@@ -319,7 +319,7 @@ class TradingBot:
                 IntervalTrigger(hours=24),
                 id="stock_screen",
                 name="Stock Screener",
-                next_run_time=datetime.utcnow()  # Seed the list immediately
+                next_run_time=datetime.now()  # Seed the list immediately
             )
 
         # Handle shutdown signals
