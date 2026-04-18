@@ -108,8 +108,8 @@ class Settings:
     paper_trading: bool = True
 
     # Logging
-    log_level: str = "INFO"
-    log_file: str = "crypto_trading_bot/logs/trading_bot.log"
+    log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
+    log_file: str = field(default_factory=lambda: os.getenv("LOG_FILE", "crypto_trading_bot/logs/trading_bot.log"))
 
 
 # Global settings instance
