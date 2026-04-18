@@ -6,9 +6,11 @@ Pipeline:
     3. Rank by absolute technical score (bullish OR bearish setups) and take top N.
 """
 
+from io import StringIO
 from typing import List, Tuple
 
 import pandas as pd
+import requests
 
 from ..analysis import technical_analyzer
 from ..config.stocks import (
@@ -23,10 +25,14 @@ from . import stock_data
 
 logger = get_logger("stock_screener")
 
+_WIKI_UA = "Mozilla/5.0 (compatible; crypto-trading-bot/1.0)"
+
 
 def fetch_nasdaq100_tickers() -> List[str]:
     """Scrape the current NASDAQ-100 constituents from Wikipedia."""
-    tables = pd.read_html(NASDAQ100_URL)
+    resp = requests.get(NASDAQ100_URL, headers={"User-Agent": _WIKI_UA}, timeout=15)
+    resp.raise_for_status()
+    tables = pd.read_html(StringIO(resp.text))
     for t in tables:
         cols = [c for c in t.columns]
         for name in ("Ticker", "Symbol"):
