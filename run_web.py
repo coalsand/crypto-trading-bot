@@ -36,19 +36,11 @@ def main():
     # Create and run app
     app = create_app()
 
-    print(f"""
-╔══════════════════════════════════════════════════════════════╗
-║           Crypto Trading Bot - Web Interface                 ║
-╠══════════════════════════════════════════════════════════════╣
-║                                                              ║
-║  Dashboard: http://{args.host}:{args.port}/                          ║
-║                                                              ║
-║  Mode: {'DEBUG' if args.debug else 'PRODUCTION'} | Paper Trading: ENABLED                 ║
-║                                                              ║
-║  Press Ctrl+C to stop                                        ║
-║                                                              ║
-╚══════════════════════════════════════════════════════════════╝
-""")
+    mode = "DEBUG" if args.debug else "PRODUCTION"
+    print(f"Crypto Trading Bot - Web Interface")
+    print(f"  Dashboard: http://{args.host}:{args.port}/")
+    print(f"  Mode: {mode} | Paper Trading: ENABLED")
+    print(f"  Press Ctrl+C to stop")
 
     app.run(
         host=args.host,
