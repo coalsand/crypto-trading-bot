@@ -26,8 +26,12 @@ from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from .config import settings, TRADEABLE_COINS
+from .config.stocks import is_market_open
 from .storage import db
-from .data import market_data_fetcher, reddit_collector, twitter_collector, news_collector
+from .data import (
+    market_data_fetcher, reddit_collector, twitter_collector, news_collector,
+    stock_data, stock_screener,
+)
 from .analysis import technical_analyzer, sentiment_analyzer
 from .strategy import signal_generator, portfolio_tracker
 from .execution import paper_trader, live_trader, paper_order_manager
@@ -53,6 +57,9 @@ class TradingBot:
 
         self.scheduler = None
         self.running = False
+
+        # Active stock list — populated by the daily screener
+        self.active_stocks: list = []
 
         # Initialize database
         db.create_tables()
@@ -119,6 +126,59 @@ class TradingBot:
         except Exception as e:
             logger.error(f"Error getting current prices: {e}")
             return {}
+
+    def run_stock_screen(self):
+        """Refresh the active stock list via the screener."""
+        if not settings.enable_stocks:
+            return
+        try:
+            logger.info("Running stock screener (NASDAQ-100 → top candidates)...")
+            self.active_stocks = stock_screener.screen()
+            logger.info(f"Active stock list: {self.active_stocks}")
+        except Exception as e:
+            logger.exception(f"Stock screener failed: {e}")
+
+    def run_stock_cycle(self, current_prices: dict):
+        """Run signal generation + execution for the active stock list."""
+        if not settings.enable_stocks:
+            return
+        if not self.active_stocks:
+            logger.debug("Stock cycle: no active stocks; run the screener first")
+            return
+        if not is_market_open():
+            logger.debug("Stock cycle skipped: US equities market is closed")
+            return
+
+        try:
+            bars = stock_data.fetch_all_ohlcv(self.active_stocks)
+            if not bars:
+                logger.warning("Stock cycle: no OHLCV for active list")
+                return
+
+            stock_prices = stock_data.get_current_prices(self.active_stocks)
+            combined_prices = {**current_prices, **stock_prices}
+            self.trader.update_portfolio_prices(combined_prices)
+            self.trader.check_and_close_positions(combined_prices)
+
+            signals = signal_generator.generate_all_signals(
+                bars,
+                symbols=list(bars.keys()),
+                asset_type="stock",
+            )
+            signal_generator.save_signals(signals)
+
+            actionable = signal_generator.get_actionable_signals(signals)
+            logger.info(f"Stock cycle: {len(actionable)} actionable stock signals")
+            for sig in actionable:
+                trade = self.trader.execute_signal(sig, combined_prices)
+                if trade:
+                    trade_logger.log_trade_open(
+                        trade.symbol, trade.trade_type.value, trade.quantity,
+                        trade.entry_price, trade.stop_loss, trade.take_profit,
+                        self.paper_mode,
+                    )
+        except Exception as e:
+            logger.exception(f"Error in stock cycle: {e}")
 
     def run_trading_cycle(self):
         """Run a complete trading cycle."""
@@ -191,7 +251,10 @@ class TradingBot:
                         self.paper_mode
                     )
 
-            # 8. Save portfolio snapshot
+            # 8. Stock cycle (uses the same trader/portfolio; no-op if disabled or market closed)
+            self.run_stock_cycle(current_prices)
+
+            # 9. Save portfolio snapshot
             self.trader.save_portfolio_snapshot()
 
             # 9. Log portfolio state
@@ -249,6 +312,16 @@ class TradingBot:
             next_run_time=datetime.utcnow()  # Run immediately on start
         )
 
+        # Schedule stock screener (daily refresh of the active list)
+        if settings.enable_stocks:
+            self.scheduler.add_job(
+                self.run_stock_screen,
+                IntervalTrigger(hours=24),
+                id="stock_screen",
+                name="Stock Screener",
+                next_run_time=datetime.utcnow()  # Seed the list immediately
+            )
+
         # Handle shutdown signals
         def shutdown(signum, frame):
             logger.info("Shutdown signal received, stopping bot...")
@@ -283,7 +356,11 @@ class TradingBot:
         # Fetch sentiment first
         self.run_sentiment_update()
 
-        # Run trading cycle
+        # Seed the active stock list before the trading cycle
+        if settings.enable_stocks:
+            self.run_stock_screen()
+
+        # Run trading cycle (includes stock cycle if enabled)
         self.run_trading_cycle()
 
         logger.info("Single cycle completed")

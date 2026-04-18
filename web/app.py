@@ -9,7 +9,7 @@ from flask import Flask, render_template, jsonify, request, Response
 
 from ..config import settings, TRADEABLE_COINS, SUPPORTED_COINS
 from ..storage import db, TradeStatus, SignalType
-from ..data import market_data_fetcher
+from ..data import market_data_fetcher, stock_data
 from ..analysis import technical_analyzer, sentiment_analyzer
 from ..strategy import signal_generator, portfolio_tracker, risk_manager
 from ..execution import paper_trader, paper_order_manager
@@ -149,9 +149,14 @@ def api_portfolio():
 
 @app.route("/api/positions")
 def api_positions():
-    """Get open positions with current prices."""
+    """Get open positions with current prices (crypto + stock)."""
     try:
         current_prices = market_data_fetcher.get_current_prices()
+        # Merge in stock prices for any open stock positions
+        open_trades = db.get_open_trades(is_paper=True)
+        stock_syms = [t.symbol for t in open_trades if getattr(t, "asset_type", "crypto") == "stock"]
+        if stock_syms:
+            current_prices = {**current_prices, **stock_data.get_current_prices(stock_syms)}
         summary = paper_order_manager.get_open_positions_summary(current_prices)
         return jsonify(summary)
     except Exception as e:
@@ -165,11 +170,15 @@ def api_trades():
         days = request.args.get("days", 30, type=int)
         trades = paper_order_manager.get_trade_history(days=days)
 
+        asset_filter = request.args.get("asset_type")  # "crypto" | "stock" | None
         trades_data = []
         for t in trades:
+            if asset_filter and getattr(t, "asset_type", "crypto") != asset_filter:
+                continue
             trades_data.append({
                 "id": t.id,
                 "symbol": t.symbol,
+                "asset_type": getattr(t, "asset_type", "crypto"),
                 "type": t.trade_type.value,
                 "status": t.status.value,
                 "entry_price": t.entry_price,
@@ -197,11 +206,16 @@ def api_signals():
                 Signal.timestamp.desc()
             ).limit(50).all()
 
+            asset_filter = request.args.get("asset_type")
             signals_data = []
             for s in signals:
+                s_asset = getattr(s, "asset_type", "crypto")
+                if asset_filter and s_asset != asset_filter:
+                    continue
                 signals_data.append({
                     "id": s.id,
                     "symbol": s.symbol,
+                    "asset_type": s_asset,
                     "type": s.signal_type.value,
                     "technical_score": s.technical_score,
                     "sentiment_score": s.sentiment_score,

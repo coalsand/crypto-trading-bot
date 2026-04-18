@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Dict, List, Optional
 
 from ..config import settings, TRADEABLE_COINS
+from ..config.stocks import can_open_new_stock_position, is_market_open
 from ..storage import db, Trade, TradeStatus, TradeType, SignalType
 from ..strategy import TradingSignal, RiskManager, PortfolioTracker, risk_manager
 
@@ -59,6 +60,13 @@ class PaperTrader:
             logger.debug(f"Signal is HOLD for {signal.symbol}, skipping")
             return None
 
+        # Market hours gate for stocks — no new opens outside the window
+        if signal.asset_type == "stock" and not can_open_new_stock_position():
+            logger.info(
+                f"Skipping stock open for {signal.symbol}: market closed or after 15:30 ET"
+            )
+            return None
+
         # Get current price
         current_price = current_prices.get(signal.symbol)
         if not current_price:
@@ -94,8 +102,21 @@ class PaperTrader:
             trade_type
         )
 
+        # Whole-share rounding for stocks; crypto keeps fractional quantity
+        quantity = assessment.quantity
+        position_size_usd = assessment.position_size_usd
+        if signal.asset_type == "stock":
+            quantity = float(int(quantity))
+            if quantity < 1:
+                logger.info(
+                    f"Skipping stock open for {signal.symbol}: "
+                    f"position size yields <1 whole share"
+                )
+                return None
+            position_size_usd = quantity * executed_price
+
         # Calculate fees
-        fees = assessment.position_size_usd * self.fee_pct
+        fees = position_size_usd * self.fee_pct
 
         # Create trade record
         trade = Trade(
@@ -105,13 +126,14 @@ class PaperTrader:
             created_at=datetime.utcnow(),
             opened_at=datetime.utcnow(),
             entry_price=executed_price,
-            quantity=assessment.quantity,
-            position_size_usd=assessment.position_size_usd,
+            quantity=quantity,
+            position_size_usd=position_size_usd,
             stop_loss=assessment.stop_loss,
             take_profit=assessment.take_profit,
             fees=fees,
             entry_order_id=f"paper_{uuid.uuid4().hex[:12]}",
             is_paper=True,
+            asset_type=signal.asset_type,
             notes=f"Signal strength: {signal.strength:.2f}, confidence: {signal.confidence:.2f}"
         )
 

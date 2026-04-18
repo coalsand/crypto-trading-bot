@@ -262,6 +262,7 @@ class OrderManager:
 
             summary["positions"].append({
                 "symbol": pos.symbol,
+                "asset_type": getattr(pos, "asset_type", "crypto"),
                 "type": pos.trade_type.value,
                 "quantity": pos.quantity,
                 "entry_price": pos.entry_price,

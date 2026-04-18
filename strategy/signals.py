@@ -21,6 +21,7 @@ class TradingSignal:
     symbol: str
     signal_type: SignalType = SignalType.HOLD
     timestamp: datetime = field(default_factory=datetime.utcnow)
+    asset_type: str = "crypto"  # "crypto" | "stock"
 
     # Scores
     technical_score: float = 0.0
@@ -58,7 +59,8 @@ class TradingSignal:
             stop_loss=self.stop_loss,
             take_profit=self.take_profit,
             position_size_pct=self.position_size_pct,
-            reasoning=json.dumps(self.reasoning)
+            reasoning=json.dumps(self.reasoning),
+            asset_type=self.asset_type,
         )
 
 
@@ -82,20 +84,22 @@ class SignalGenerator:
         self,
         symbol: str,
         market_data: pd.DataFrame,
-        sentiment_hours: int = 24
+        sentiment_hours: int = 24,
+        asset_type: str = "crypto",
     ) -> TradingSignal:
         """
         Generate a trading signal for a symbol.
 
         Args:
-            symbol: Coin symbol
+            symbol: Trading symbol (coin or stock ticker)
             market_data: DataFrame with OHLCV data
             sentiment_hours: Hours of sentiment data to consider
+            asset_type: "crypto" or "stock" — stocks skip sentiment analysis
 
         Returns:
             TradingSignal with analysis and recommendations
         """
-        signal = TradingSignal(symbol=symbol)
+        signal = TradingSignal(symbol=symbol, asset_type=asset_type)
         reasoning = {}
 
         # Technical Analysis
@@ -113,25 +117,32 @@ class SignalGenerator:
             "ema_signal": tech_signals.ema_signal
         }
 
-        # Sentiment Analysis
-        sentiment = self.sentiment_analyzer.get_aggregated_sentiment(symbol, sentiment_hours)
-        signal.sentiment_data = sentiment
-        signal.sentiment_score = sentiment.overall_score
+        # Sentiment Analysis — crypto only; stocks skip this for MVP
+        if asset_type == "crypto":
+            sentiment = self.sentiment_analyzer.get_aggregated_sentiment(symbol, sentiment_hours)
+            signal.sentiment_data = sentiment
+            signal.sentiment_score = sentiment.overall_score
 
-        reasoning["sentiment"] = {
-            "overall": sentiment.overall_score,
-            "reddit": sentiment.reddit_score,
-            "twitter": sentiment.twitter_score,
-            "news": sentiment.news_score,
-            "source_count": sentiment.source_count,
-            "post_count": sentiment.post_count
-        }
+            reasoning["sentiment"] = {
+                "overall": sentiment.overall_score,
+                "reddit": sentiment.reddit_score,
+                "twitter": sentiment.twitter_score,
+                "news": sentiment.news_score,
+                "source_count": sentiment.source_count,
+                "post_count": sentiment.post_count
+            }
+        else:
+            signal.sentiment_score = 0.0
+            reasoning["sentiment"] = {"skipped": "no sentiment sources for stocks (MVP)"}
 
-        # Combined Score
-        signal.combined_score = (
-            signal.technical_score * self.config.technical_weight +
-            signal.sentiment_score * self.config.sentiment_weight
-        )
+        # Combined Score — for stocks, sentiment weight folds into technical
+        if asset_type == "crypto":
+            signal.combined_score = (
+                signal.technical_score * self.config.technical_weight +
+                signal.sentiment_score * self.config.sentiment_weight
+            )
+        else:
+            signal.combined_score = signal.technical_score
 
         # Determine signal type
         signal.signal_type = self._determine_signal_type(signal)
@@ -302,21 +313,27 @@ class SignalGenerator:
     def generate_all_signals(
         self,
         market_data_dict: Dict[str, pd.DataFrame],
-        sentiment_hours: int = 24
+        sentiment_hours: int = 24,
+        symbols: Optional[List[str]] = None,
+        asset_type: str = "crypto",
     ) -> List[TradingSignal]:
         """
-        Generate signals for all tradeable coins.
+        Generate signals for the given symbols (defaults to TRADEABLE_COINS).
 
         Args:
             market_data_dict: Dictionary mapping symbol to DataFrame
             sentiment_hours: Hours of sentiment data to consider
+            symbols: Explicit symbol list (e.g. stock tickers from the screener).
+                     When None, uses TRADEABLE_COINS (crypto).
+            asset_type: "crypto" or "stock"
 
         Returns:
             List of TradingSignals
         """
         signals = []
+        target_symbols = symbols if symbols is not None else list(TRADEABLE_COINS)
 
-        for symbol in TRADEABLE_COINS:
+        for symbol in target_symbols:
             if symbol not in market_data_dict:
                 logger.warning(f"No market data for {symbol}")
                 continue
@@ -325,7 +342,8 @@ class SignalGenerator:
                 signal = self.generate_signal(
                     symbol,
                     market_data_dict[symbol],
-                    sentiment_hours
+                    sentiment_hours,
+                    asset_type=asset_type,
                 )
                 signals.append(signal)
             except Exception as e:

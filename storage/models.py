@@ -156,6 +156,9 @@ class Signal(Base):
     # Reasoning
     reasoning = Column(Text, nullable=True)  # JSON with detailed reasoning
 
+    # Asset classification
+    asset_type = Column(String(10), nullable=False, default="crypto")  # "crypto" | "stock"
+
     trade = relationship("Trade", back_populates="signal")
 
     def __repr__(self):
@@ -197,6 +200,9 @@ class Trade(Base):
 
     # Paper trading flag
     is_paper = Column(Boolean, default=True)
+
+    # Asset classification
+    asset_type = Column(String(10), nullable=False, default="crypto")  # "crypto" | "stock"
 
     # Notes
     notes = Column(Text, nullable=True)

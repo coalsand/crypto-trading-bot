@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import List, Optional
 from contextlib import contextmanager
 
-from sqlalchemy import create_engine, desc
+from sqlalchemy import create_engine, desc, inspect, text
 from sqlalchemy.orm import sessionmaker, Session
 
 from .models import (
@@ -25,8 +25,23 @@ class Database:
         self.SessionLocal = sessionmaker(bind=self.engine, expire_on_commit=False)
 
     def create_tables(self):
-        """Create all tables in the database."""
+        """Create all tables in the database, then apply lightweight migrations."""
         Base.metadata.create_all(self.engine)
+        self._migrate_asset_type()
+
+    def _migrate_asset_type(self):
+        """Add the asset_type column to trades and signals tables if missing."""
+        inspector = inspect(self.engine)
+        for table_name in ("trades", "signals"):
+            if table_name not in inspector.get_table_names():
+                continue
+            cols = {c["name"] for c in inspector.get_columns(table_name)}
+            if "asset_type" not in cols:
+                with self.engine.begin() as conn:
+                    conn.execute(text(
+                        f"ALTER TABLE {table_name} "
+                        f"ADD COLUMN asset_type VARCHAR(10) NOT NULL DEFAULT 'crypto'"
+                    ))
 
     def drop_tables(self):
         """Drop all tables (use with caution)."""

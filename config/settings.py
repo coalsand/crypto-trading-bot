@@ -107,6 +107,11 @@ class Settings:
     # Paper trading mode (default: True for safety)
     paper_trading: bool = True
 
+    # Stock trading toggle (opt-in; defaults to enabled)
+    enable_stocks: bool = field(
+        default_factory=lambda: os.getenv("ENABLE_STOCKS", "true").lower() in ("1", "true", "yes")
+    )
+
     # Logging
     log_level: str = field(default_factory=lambda: os.getenv("LOG_LEVEL", "INFO"))
     log_file: str = field(default_factory=lambda: os.getenv("LOG_FILE", "crypto_trading_bot/logs/trading_bot.log"))

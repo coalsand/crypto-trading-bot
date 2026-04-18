@@ -40,5 +40,10 @@ requests>=2.31.0
 # Web UI
 flask>=3.0.0
 
+# Stock market data
+yfinance>=0.2.40
+pytz>=2024.1
+lxml>=5.0.0  # For pandas.read_html (NASDAQ-100 screener)
+
 # Utilities
 typing-extensions>=4.8.0
