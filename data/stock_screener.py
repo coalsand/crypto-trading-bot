@@ -6,8 +6,9 @@ Pipeline:
     3. Rank by absolute technical score (bullish OR bearish setups) and take top N.
 """
 
+from datetime import datetime, timedelta
 from io import StringIO
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import pandas as pd
 import requests
@@ -26,21 +27,49 @@ from . import stock_data
 logger = get_logger("stock_screener")
 
 _WIKI_UA = "Mozilla/5.0 (compatible; crypto-trading-bot/1.0)"
+_NAME_CACHE: Dict[str, str] = {}
+_NAME_CACHE_TS: datetime = datetime.min
+_NAME_CACHE_TTL = timedelta(hours=24)
 
 
-def fetch_nasdaq100_tickers() -> List[str]:
-    """Scrape the current NASDAQ-100 constituents from Wikipedia."""
+def fetch_nasdaq100_constituents() -> Dict[str, str]:
+    """Return a {ticker: company_name} map scraped from Wikipedia."""
     resp = requests.get(NASDAQ100_URL, headers={"User-Agent": _WIKI_UA}, timeout=15)
     resp.raise_for_status()
     tables = pd.read_html(StringIO(resp.text))
     for t in tables:
-        cols = [c for c in t.columns]
-        for name in ("Ticker", "Symbol"):
-            if name in cols:
-                tickers = t[name].dropna().astype(str).str.strip().tolist()
-                # Yahoo uses '-' where Wikipedia uses '.' for share classes (e.g. BRK.B -> BRK-B)
-                return [s.replace(".", "-") for s in tickers if s]
+        ticker_col = next((c for c in ("Ticker", "Symbol") if c in t.columns), None)
+        if ticker_col is None:
+            continue
+        name_col = next((c for c in ("Company", "Name", "Security") if c in t.columns), None)
+        df = t[[ticker_col] + ([name_col] if name_col else [])].dropna(subset=[ticker_col])
+        result: Dict[str, str] = {}
+        for _, row in df.iterrows():
+            # Yahoo uses '-' where Wikipedia uses '.' for share classes (e.g. BRK.B -> BRK-B)
+            ticker = str(row[ticker_col]).strip().replace(".", "-")
+            if not ticker:
+                continue
+            result[ticker] = str(row[name_col]).strip() if name_col else ticker
+        if result:
+            return result
     raise RuntimeError("Could not locate NASDAQ-100 constituents table on Wikipedia")
+
+
+def get_name_map() -> Dict[str, str]:
+    """Cached {ticker: name} map; refreshes from Wikipedia every 24h."""
+    global _NAME_CACHE, _NAME_CACHE_TS
+    if not _NAME_CACHE or (datetime.utcnow() - _NAME_CACHE_TS) > _NAME_CACHE_TTL:
+        try:
+            _NAME_CACHE = fetch_nasdaq100_constituents()
+            _NAME_CACHE_TS = datetime.utcnow()
+        except Exception as e:
+            logger.warning(f"stock_screener: name-map refresh failed, using last known ({len(_NAME_CACHE)}): {e}")
+    return _NAME_CACHE
+
+
+def fetch_nasdaq100_tickers() -> List[str]:
+    """Return the NASDAQ-100 ticker list (derived from the constituents map)."""
+    return list(get_name_map().keys())
 
 
 def screen(top_n: int = TOP_N_STOCKS) -> List[str]:

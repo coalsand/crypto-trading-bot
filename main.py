@@ -155,7 +155,13 @@ class TradingBot:
                 logger.warning("Stock cycle: no OHLCV for active list")
                 return
 
-            stock_prices = stock_data.get_current_prices(self.active_stocks)
+            # Include any held stocks that fell off the watchlist — otherwise SL/TP can't trigger
+            held_stock_syms = [
+                t.symbol for t in db.get_open_trades(is_paper=True)
+                if getattr(t, "asset_type", "crypto") == "stock"
+            ]
+            price_symbols = list({*self.active_stocks, *held_stock_syms})
+            stock_prices = stock_data.get_current_prices(price_symbols)
             combined_prices = {**current_prices, **stock_prices}
 
             # Signal generation — runs always so users can see recent stock signals

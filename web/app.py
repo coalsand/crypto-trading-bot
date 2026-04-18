@@ -9,7 +9,7 @@ from flask import Flask, render_template, jsonify, request, Response
 
 from ..config import settings, TRADEABLE_COINS, SUPPORTED_COINS
 from ..storage import db, TradeStatus, SignalType
-from ..data import market_data_fetcher, stock_data
+from ..data import market_data_fetcher, stock_data, stock_screener
 from ..analysis import technical_analyzer, sentiment_analyzer
 from ..strategy import signal_generator, portfolio_tracker, risk_manager
 from ..execution import paper_trader, paper_order_manager
@@ -306,10 +306,12 @@ def api_stocks_active():
             symbols = [r.symbol for r in rows]
             prices = stock_data.get_current_prices(symbols) if symbols else {}
 
+            name_map = stock_screener.get_name_map()
             rows_sorted = sorted(rows, key=lambda r: abs(r.combined_score or 0), reverse=True)
             active = [
                 {
                     "symbol": r.symbol,
+                    "name": name_map.get(r.symbol, ""),
                     "price": prices.get(r.symbol),
                     "signal_type": r.signal_type.value,
                     "technical_score": r.technical_score,

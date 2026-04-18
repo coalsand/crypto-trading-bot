@@ -45,6 +45,7 @@
                 <thead>
                     <tr>
                         <th>Ticker</th>
+                        <th>Company</th>
                         <th class="text-end">Price</th>
                         <th class="text-end">Technical</th>
                         <th class="text-end">Combined</th>
@@ -56,7 +57,7 @@
                 </thead>
                 <tbody id="stocksTable">
                     <tr>
-                        <td colspan="8" class="text-center text-muted py-4">
+                        <td colspan="9" class="text-center text-muted py-4">
                             <div class="spinner-border spinner-border-sm me-2"></div>
                             Loading watchlist...
                         </td>
@@ -134,7 +135,7 @@
             if (active.length === 0) {
                 document.getElementById('stocksTable').innerHTML = `
                     <tr>
-                        <td colspan="8" class="text-center text-muted py-5">
+                        <td colspan="9" class="text-center text-muted py-5">
                             <i class="bi bi-inbox fs-1 d-block mb-2"></i>
                             No stock signals in the last 48 hours.
                             <br><small>The screener runs daily; signals also regenerate each trading cycle.</small>
@@ -155,9 +156,11 @@
                 const tpStr = s.take_profit ? formatCurrency(s.take_profit) : '--';
                 const ts = new Date(s.last_signal_at).toLocaleString();
 
+                const nameStr = s.name ? s.name : '';
                 html += `
                     <tr>
-                        <td><a href="#" class="text-decoration-none fw-bold" onclick="showChart('${s.symbol}'); return false;">${s.symbol}</a></td>
+                        <td><a href="#" class="text-decoration-none fw-bold" onclick="showChart('${s.symbol}', ${JSON.stringify(nameStr)}); return false;">${s.symbol}</a></td>
+                        <td><small class="text-muted">${nameStr}</small></td>
                         <td class="text-end">${priceStr}</td>
                         <td class="text-end ${techClass}">${s.technical_score.toFixed(3)}</td>
                         <td class="text-end">${s.combined_score.toFixed(3)}</td>
@@ -180,9 +183,10 @@
     let chartInstance = null;
     let currentChartSymbol = null;
 
-    async function showChart(symbol) {
+    async function showChart(symbol, name) {
         currentChartSymbol = symbol;
-        document.getElementById('chartModalSymbol').textContent = symbol;
+        const label = name ? `${symbol} — ${name}` : symbol;
+        document.getElementById('chartModalSymbol').textContent = label;
 
         const modal = new bootstrap.Modal(document.getElementById('stockChartModal'));
         modal.show();
