@@ -250,6 +250,31 @@ def api_prices():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/stocks/ohlcv/<symbol>")
+def api_stocks_ohlcv(symbol: str):
+    """Daily OHLCV bars for a stock ticker (default 30 days)."""
+    try:
+        period = request.args.get("period", "30d")
+        interval = request.args.get("interval", "1d")
+        df = stock_data.fetch_ohlcv(symbol, period=period, interval=interval)
+        if df.empty:
+            return jsonify({"symbol": symbol, "ohlcv": []})
+        bars = [
+            {
+                "timestamp": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
+                "open": float(row["open"]),
+                "high": float(row["high"]),
+                "low": float(row["low"]),
+                "close": float(row["close"]),
+                "volume": float(row["volume"]),
+            }
+            for ts, row in df.iterrows()
+        ]
+        return jsonify({"symbol": symbol, "ohlcv": bars})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/stocks/active")
 def api_stocks_active():
     """

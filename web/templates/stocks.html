@@ -74,6 +74,24 @@
         outside of that, signals are generated but not executed. Sentiment analysis is crypto-only (MVP).
     </small>
 </div>
+
+<!-- Chart modal -->
+<div class="modal fade" id="stockChartModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><span id="chartModalSymbol">--</span> &middot; 30-day price</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="chartStatus" class="text-center text-muted py-3">
+                    <div class="spinner-border spinner-border-sm me-2"></div>Loading chart...
+                </div>
+                <canvas id="stockChartCanvas" height="120" class="d-none"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
@@ -130,7 +148,7 @@
 
                 html += `
                     <tr>
-                        <td><strong>${s.symbol}</strong></td>
+                        <td><a href="#" class="text-decoration-none fw-bold" onclick="showChart('${s.symbol}'); return false;">${s.symbol}</a></td>
                         <td class="text-end">${priceStr}</td>
                         <td class="text-end ${techClass}">${s.technical_score.toFixed(3)}</td>
                         <td class="text-end">${s.combined_score.toFixed(3)}</td>
@@ -146,6 +164,65 @@
         } catch (error) {
             console.error('Error loading stocks:', error);
             showToast('Error', 'Failed to load stock watchlist', 'danger');
+        }
+    }
+
+    // ============ Chart modal ============
+    let chartInstance = null;
+
+    async function showChart(symbol) {
+        document.getElementById('chartModalSymbol').textContent = symbol;
+        const statusEl = document.getElementById('chartStatus');
+        const canvas = document.getElementById('stockChartCanvas');
+        statusEl.classList.remove('d-none');
+        statusEl.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Loading chart...';
+        canvas.classList.add('d-none');
+
+        const modal = new bootstrap.Modal(document.getElementById('stockChartModal'));
+        modal.show();
+
+        try {
+            const data = await fetchAPI(`/api/stocks/ohlcv/${symbol}?period=30d&interval=1d`);
+            const bars = data.ohlcv || [];
+            if (bars.length === 0) {
+                statusEl.textContent = 'No data returned.';
+                return;
+            }
+
+            const labels = bars.map(b => new Date(b.timestamp).toLocaleDateString());
+            const closes = bars.map(b => b.close);
+
+            statusEl.classList.add('d-none');
+            canvas.classList.remove('d-none');
+
+            if (chartInstance) chartInstance.destroy();
+            chartInstance = new Chart(canvas.getContext('2d'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: `${symbol} close`,
+                        data: closes,
+                        borderColor: '#0dcaf0',
+                        backgroundColor: 'rgba(13, 202, 240, 0.15)',
+                        tension: 0.2,
+                        fill: true,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { ticks: { maxTicksLimit: 8 } },
+                        y: { ticks: { callback: v => '$' + v.toFixed(2) } }
+                    }
+                }
+            });
+        } catch (error) {
+            statusEl.innerHTML = `<span class="text-danger">Failed to load chart: ${error.message || error}</span>`;
         }
     }
 </script>
