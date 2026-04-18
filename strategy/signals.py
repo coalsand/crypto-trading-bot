@@ -126,7 +126,7 @@ class SignalGenerator:
             reasoning["sentiment"] = {
                 "overall": sentiment.overall_score,
                 "reddit": sentiment.reddit_score,
-                "twitter": sentiment.twitter_score,
+                "stocktwits": sentiment.stocktwits_score,
                 "news": sentiment.news_score,
                 "source_count": sentiment.source_count,
                 "post_count": sentiment.post_count

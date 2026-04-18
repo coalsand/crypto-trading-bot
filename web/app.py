@@ -337,7 +337,7 @@ def api_sentiment(symbol):
             "symbol": symbol.upper(),
             "overall_score": sentiment.overall_score,
             "reddit_score": sentiment.reddit_score,
-            "twitter_score": sentiment.twitter_score,
+            "stocktwits_score": sentiment.stocktwits_score,
             "news_score": sentiment.news_score,
             "source_count": sentiment.source_count,
             "post_count": sentiment.post_count
@@ -555,11 +555,11 @@ def api_close_position(symbol):
 def api_refresh_sentiment():
     """Refresh sentiment data."""
     try:
-        from ..data import reddit_collector, twitter_collector, news_collector
+        from ..data import reddit_collector, stocktwits_collector, news_collector
 
         results = {
             "reddit": 0,
-            "twitter": 0,
+            "stocktwits": 0,
             "news": 0
         }
 
@@ -570,10 +570,10 @@ def api_refresh_sentiment():
             logger.error(f"Reddit error: {e}")
 
         try:
-            twitter_results = twitter_collector.fetch_all_coins(sentiment_analyzer, max_results_per_coin=30)
-            results["twitter"] = sum(twitter_results.values())
+            stocktwits_results = stocktwits_collector.fetch_all_coins(sentiment_analyzer, max_results_per_coin=30)
+            results["stocktwits"] = sum(stocktwits_results.values())
         except Exception as e:
-            logger.error(f"Twitter error: {e}")
+            logger.error(f"StockTwits error: {e}")
 
         try:
             news_results = news_collector.fetch_all_coins(sentiment_analyzer, hours=24)

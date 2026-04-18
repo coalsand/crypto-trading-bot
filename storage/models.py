@@ -36,7 +36,7 @@ class SignalType(enum.Enum):
 class SentimentSource(enum.Enum):
     """Sentiment data source enumeration."""
     REDDIT = "reddit"
-    TWITTER = "twitter"
+    STOCKTWITS = "stocktwits"
     NEWS = "news"
 
 

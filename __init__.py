@@ -6,7 +6,7 @@ and multi-source sentiment analysis.
 
 Features:
 - Technical analysis (RSI, MACD, Bollinger Bands, EMA)
-- Sentiment analysis from Reddit, Twitter, and News
+- Sentiment analysis from Reddit, StockTwits, and News
 - Risk management with position sizing and stop-losses
 - Paper trading for strategy testing
 - Live trading via Kraken API

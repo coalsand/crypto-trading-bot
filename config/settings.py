@@ -29,16 +29,6 @@ class RedditConfig:
 
 
 @dataclass
-class TwitterConfig:
-    """Twitter/X API configuration."""
-    bearer_token: str = field(default_factory=lambda: os.getenv("TWITTER_BEARER_TOKEN", ""))
-    api_key: str = field(default_factory=lambda: os.getenv("TWITTER_API_KEY", ""))
-    api_secret: str = field(default_factory=lambda: os.getenv("TWITTER_API_SECRET", ""))
-    access_token: str = field(default_factory=lambda: os.getenv("TWITTER_ACCESS_TOKEN", ""))
-    access_token_secret: str = field(default_factory=lambda: os.getenv("TWITTER_ACCESS_TOKEN_SECRET", ""))
-
-
-@dataclass
 class TradingConfig:
     """Trading strategy configuration."""
     # Position sizing
@@ -99,7 +89,6 @@ class Settings:
     """Main settings container."""
     kraken: KrakenConfig = field(default_factory=KrakenConfig)
     reddit: RedditConfig = field(default_factory=RedditConfig)
-    twitter: TwitterConfig = field(default_factory=TwitterConfig)
     trading: TradingConfig = field(default_factory=TradingConfig)
     scheduler: SchedulerConfig = field(default_factory=SchedulerConfig)
     database: DatabaseConfig = field(default_factory=DatabaseConfig)

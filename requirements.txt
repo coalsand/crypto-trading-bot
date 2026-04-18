@@ -14,8 +14,7 @@ pandas-ta>=0.3.14b
 # Reddit API
 praw>=7.7.0
 
-# Twitter/X API
-tweepy>=4.14.0
+# StockTwits sentiment collection uses plain HTTP (requests) — no dedicated SDK
 
 # NLP and sentiment analysis
 transformers>=4.35.0

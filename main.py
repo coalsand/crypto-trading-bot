@@ -29,7 +29,7 @@ from .config import settings, TRADEABLE_COINS
 from .config.stocks import is_market_open
 from .storage import db
 from .data import (
-    market_data_fetcher, reddit_collector, twitter_collector, news_collector,
+    market_data_fetcher, reddit_collector, stocktwits_collector, news_collector,
     stock_data, stock_screener,
 )
 from .analysis import technical_analyzer, sentiment_analyzer
@@ -98,15 +98,15 @@ class TradingBot:
             logger.error(f"Error fetching Reddit data: {e}")
 
         try:
-            # Twitter
-            twitter_results = twitter_collector.fetch_all_coins(
+            # StockTwits
+            stocktwits_results = stocktwits_collector.fetch_all_coins(
                 sentiment_analyzer,
-                max_results_per_coin=50
+                max_results_per_coin=30
             )
-            logger.info(f"Twitter sentiment: {sum(twitter_results.values())} records")
+            logger.info(f"StockTwits sentiment: {sum(stocktwits_results.values())} records")
 
         except Exception as e:
-            logger.error(f"Error fetching Twitter data: {e}")
+            logger.error(f"Error fetching StockTwits data: {e}")
 
         try:
             # News

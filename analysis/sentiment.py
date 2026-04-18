@@ -27,7 +27,7 @@ class AggregateSentiment:
     """Aggregated sentiment across all sources."""
     overall_score: float
     reddit_score: Optional[float] = None
-    twitter_score: Optional[float] = None
+    stocktwits_score: Optional[float] = None
     news_score: Optional[float] = None
     source_count: int = 0
     post_count: int = 0
@@ -285,8 +285,8 @@ class SentimentAnalyzer:
 
         if "reddit" in sources:
             result.reddit_score = sources["reddit"]["score"]
-        if "twitter" in sources:
-            result.twitter_score = sources["twitter"]["score"]
+        if "stocktwits" in sources:
+            result.stocktwits_score = sources["stocktwits"]["score"]
         if "news" in sources:
             result.news_score = sources["news"]["score"]
 
@@ -295,7 +295,7 @@ class SentimentAnalyzer:
     def calculate_weighted_sentiment(
         self,
         reddit_score: Optional[float],
-        twitter_score: Optional[float],
+        stocktwits_score: Optional[float],
         news_score: Optional[float],
         weights: Optional[Dict[str, float]] = None
     ) -> float:
@@ -304,7 +304,7 @@ class SentimentAnalyzer:
 
         Args:
             reddit_score: Reddit sentiment score
-            twitter_score: Twitter sentiment score
+            stocktwits_score: StockTwits sentiment score
             news_score: News sentiment score
             weights: Custom weights for each source
 
@@ -314,7 +314,7 @@ class SentimentAnalyzer:
         if weights is None:
             weights = {
                 "reddit": 0.3,
-                "twitter": 0.35,
+                "stocktwits": 0.35,
                 "news": 0.35
             }
 
@@ -325,9 +325,9 @@ class SentimentAnalyzer:
             scores.append(reddit_score * weights["reddit"])
             total_weight += weights["reddit"]
 
-        if twitter_score is not None:
-            scores.append(twitter_score * weights["twitter"])
-            total_weight += weights["twitter"]
+        if stocktwits_score is not None:
+            scores.append(stocktwits_score * weights["stocktwits"])
+            total_weight += weights["stocktwits"]
 
         if news_score is not None:
             scores.append(news_score * weights["news"])

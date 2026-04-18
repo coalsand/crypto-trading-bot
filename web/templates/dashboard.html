@@ -491,7 +491,7 @@
 
         try {
             const data = await fetchAPI('/api/refresh-sentiment', { method: 'POST' });
-            showToast('Sentiment Refreshed', `Reddit: ${data.results.reddit}, Twitter: ${data.results.twitter}, News: ${data.results.news}`, 'success');
+            showToast('Sentiment Refreshed', `Reddit: ${data.results.reddit}, StockTwits: ${data.results.stocktwits}, News: ${data.results.news}`, 'success');
         } catch (error) {
             showToast('Error', 'Failed to refresh sentiment', 'danger');
         } finally {
