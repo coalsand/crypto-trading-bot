@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+
+{% block title %}Positions - Crypto Trading Bot{% endblock %}
+{% block page_title %}Open Positions{% endblock %}
+
+{% block content %}
+<!-- Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="stat-label">Total Position Value</p>
+                <h3 class="stat-value" id="totalValue">$0.00</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="stat-label">Unrealized P&L</p>
+                <h3 class="stat-value" id="totalPnl">$0.00</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="stat-label">Open Positions</p>
+                <h3 class="stat-value" id="positionCount">0</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Positions Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-briefcase me-2"></i>Open Positions</h5>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadPositions()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Symbol</th>
+                        <th>Type</th>
+                        <th class="text-end">Quantity</th>
+                        <th class="text-end">Entry Price</th>
+                        <th class="text-end">Current Price</th>
+                        <th class="text-end">Value</th>
+                        <th class="text-end">P&L</th>
+                        <th class="text-end">Stop Loss</th>
+                        <th class="text-end">Take Profit</th>
+                        <th class="text-center">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="positionsTable">
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-4">
+                            <div class="spinner-border spinner-border-sm me-2"></div>
+                            Loading positions...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Position Details Modal -->
+<div class="modal fade" id="positionModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="positionModalTitle">Position Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="positionModalBody">
+                <!-- Content loaded dynamically -->
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-danger" id="closePositionBtn">Close Position</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let positions = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadPositions();
+        setInterval(loadPositions, 30000);
+    });
+
+    async function loadPositions() {
+        try {
+            const data = await fetchAPI('/api/positions');
+            positions = data.positions || [];
+
+            // Update summary
+            document.getElementById('totalValue').textContent = formatCurrency(data.total_value);
+
+            const pnl = data.total_unrealized_pnl;
+            document.getElementById('totalPnl').textContent = formatCurrency(pnl);
+            document.getElementById('totalPnl').className = 'stat-value ' +
+                (pnl >= 0 ? 'text-success' : 'text-danger');
+
+            document.getElementById('positionCount').textContent = data.count;
+
+            // Build table
+            if (positions.length === 0) {
+                document.getElementById('positionsTable').innerHTML = `
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            No open positions
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            let html = '';
+            for (const pos of positions) {
+                const pnlClass = pos.unrealized_pnl >= 0 ? 'text-success' : 'text-danger';
+                const pnlSign = pos.unrealized_pnl >= 0 ? '+' : '';
+                const typeClass = pos.type === 'buy' ? 'bg-success' : 'bg-danger';
+
+                html += `
+                    <tr>
+                        <td>
+                            <strong>${pos.symbol}</strong>
+                        </td>
+                        <td>
+                            <span class="badge ${typeClass}">${pos.type.toUpperCase()}</span>
+                        </td>
+                        <td class="text-end">${pos.quantity.toFixed(6)}</td>
+                        <td class="text-end">${formatCurrency(pos.entry_price)}</td>
+                        <td class="text-end">${formatCurrency(pos.current_price)}</td>
+                        <td class="text-end">${formatCurrency(pos.value)}</td>
+                        <td class="text-end ${pnlClass}">
+                            ${pnlSign}${formatCurrency(pos.unrealized_pnl)}
+                            <small class="d-block">${pnlSign}${pos.unrealized_pnl_pct.toFixed(2)}%</small>
+                        </td>
+                        <td class="text-end text-danger">${pos.stop_loss ? formatCurrency(pos.stop_loss) : '--'}</td>
+                        <td class="text-end text-success">${pos.take_profit ? formatCurrency(pos.take_profit) : '--'}</td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-danger" onclick="closePosition('${pos.symbol}')">
+                                <i class="bi bi-x-circle"></i> Close
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            document.getElementById('positionsTable').innerHTML = html;
+            updateLastUpdate();
+
+        } catch (error) {
+            console.error('Error loading positions:', error);
+            showToast('Error', 'Failed to load positions', 'danger');
+        }
+    }
+
+    async function closePosition(symbol) {
+        if (!confirm(`Are you sure you want to close the ${symbol} position?`)) {
+            return;
+        }
+
+        try {
+            const data = await fetchAPI(`/api/close-position/${symbol}`, { method: 'POST' });
+            showToast('Position Closed',
+                `${symbol} closed at ${formatCurrency(data.exit_price)}. P&L: ${formatCurrency(data.pnl)}`,
+                data.pnl >= 0 ? 'success' : 'warning'
+            );
+            loadPositions();
+        } catch (error) {
+            showToast('Error', error.message || 'Failed to close position', 'danger');
+        }
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block title %}Settings - Crypto Trading Bot{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+    <!-- Trading Mode -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-toggle-on me-2"></i>Trading Mode</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning mb-3">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    <strong>Paper Trading Mode Active</strong>
+                    <p class="mb-0 mt-1">All trades are simulated. No real money is used.</p>
+                </div>
+                <div class="form-check form-switch mb-3">
+                    <input class="form-check-input" type="checkbox" id="paperTrading" checked disabled>
+                    <label class="form-check-label" for="paperTrading">Paper Trading Mode</label>
+                </div>
+                <small class="text-muted">
+                    Live trading can only be enabled via the command line with the --live flag.
+                    This is a safety measure to prevent accidental live trading.
+                </small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scheduler Settings -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-clock me-2"></i>Scheduler Settings</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Signal Check Interval</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" id="signalInterval" value="15" disabled>
+                        <span class="input-group-text">minutes</span>
+                    </div>
+                    <small class="text-muted">How often to check for trading signals</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Sentiment Update Interval</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" id="sentimentInterval" value="30" disabled>
+                        <span class="input-group-text">minutes</span>
+                    </div>
+                    <small class="text-muted">How often to refresh sentiment data</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Position Sizing -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-pie-chart me-2"></i>Position Sizing</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Max Position Size</label>
+                    <div class="input-group">
+                        <input type="number" class="form-control" id="maxPositionSize" value="5" disabled>
+                        <span class="input-group-text">% of portfolio</span>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Max Open Positions</label>
+                    <input type="number" class="form-control" id="maxOpenPositions" value="5" disabled>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk Management -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-shield-check me-2"></i>Risk Management</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Stop Loss (ATR Multiplier)</label>
+                    <input type="number" class="form-control" id="stopLossAtr" value="2.0" step="0.1" disabled>
+                    <small class="text-muted">Stop loss distance as multiple of ATR</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Take Profit Ratio</label>
+                    <div class="input-group">
+                        <span class="input-group-text">1:</span>
+                        <input type="number" class="form-control" id="takeProfitRatio" value="3" disabled>
+                    </div>
+                    <small class="text-muted">Risk/reward ratio for take profit</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signal Weights -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-sliders me-2"></i>Signal Weights</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Technical Analysis Weight: <span id="techWeightValue">60</span>%</label>
+                    <input type="range" class="form-range" id="techWeight" min="0" max="100" value="60" disabled>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Sentiment Analysis Weight: <span id="sentWeightValue">40</span>%</label>
+                    <input type="range" class="form-range" id="sentWeight" min="0" max="100" value="40" disabled>
+                </div>
+                <div class="alert alert-info mb-0">
+                    <small>Weights must sum to 100%. Currently configured as 60/40.</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RSI Settings -->
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>RSI Settings</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Oversold Threshold</label>
+                    <input type="number" class="form-control" id="rsiOversold" value="30" disabled>
+                    <small class="text-muted">RSI below this level is considered oversold (bullish)</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Overbought Threshold</label>
+                    <input type="number" class="form-control" id="rsiOverbought" value="70" disabled>
+                    <small class="text-muted">RSI above this level is considered overbought (bearish)</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Signal Thresholds (Editable) -->
+    <div class="col-lg-6">
+        <div class="card border-primary">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0"><i class="bi bi-sliders2 me-2"></i>Signal Thresholds (Adjustable)</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-3">
+                    <small><i class="bi bi-info-circle me-1"></i> Lower thresholds = more trades. Higher = fewer but stronger signals.</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Buy Signal Threshold</label>
+                    <input type="number" class="form-control" id="buyThreshold" value="0.3" step="0.05" min="0" max="1">
+                    <small class="text-muted">Combined score must exceed this to trigger a BUY (0.0 - 1.0)</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Sell Signal Threshold</label>
+                    <input type="number" class="form-control" id="sellThreshold" value="-0.3" step="0.05" min="-1" max="0">
+                    <small class="text-muted">Combined score must be below this to trigger a SELL (-1.0 - 0.0)</small>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Minimum Confirmations Required</label>
+                    <input type="number" class="form-control" id="minConfirmations" value="2" min="1" max="4">
+                    <small class="text-muted">Number of confirming indicators needed (1-4)</small>
+                </div>
+                <div class="d-grid">
+                    <button class="btn btn-primary" onclick="saveThresholds()" id="saveThresholdsBtn">
+                        <i class="bi bi-check-lg me-1"></i> Save Thresholds
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Info Box -->
+<div class="card mt-4">
+    <div class="card-body">
+        <h5><i class="bi bi-info-circle me-2"></i>Configuration Note</h5>
+        <p class="mb-0">
+            Settings are currently read-only in the web interface. To modify settings, edit the
+            <code>config/settings.py</code> file or set environment variables in the <code>.env</code> file.
+            This ensures that important trading parameters cannot be accidentally changed during operation.
+        </p>
+    </div>
+</div>
+
+<!-- API Credentials Status -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-key me-2"></i>API Credentials Status</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-3">
+                <div class="d-flex align-items-center">
+                    <span class="status-indicator status-idle me-2" id="krakenStatus"></span>
+                    <span>Kraken API</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center">
+                    <span class="status-indicator status-idle me-2" id="redditStatus"></span>
+                    <span>Reddit API</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center">
+                    <span class="status-indicator status-idle me-2" id="twitterStatus"></span>
+                    <span>Twitter API</span>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="d-flex align-items-center">
+                    <span class="status-indicator status-running me-2"></span>
+                    <span>Database</span>
+                </div>
+            </div>
+        </div>
+        <small class="text-muted d-block mt-2">
+            Green indicates configured. API credentials are stored in the .env file.
+        </small>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        loadSettings();
+    });
+
+    async function loadSettings() {
+        try {
+            const data = await fetchAPI('/api/settings');
+
+            document.getElementById('signalInterval').value = data.signal_check_interval;
+            document.getElementById('sentimentInterval').value = data.sentiment_update_interval;
+            document.getElementById('maxPositionSize').value = data.max_position_size_pct;
+            document.getElementById('maxOpenPositions').value = data.max_open_positions;
+            document.getElementById('stopLossAtr').value = data.stop_loss_atr_multiplier;
+            document.getElementById('takeProfitRatio').value = data.take_profit_ratio;
+            document.getElementById('techWeight').value = data.technical_weight;
+            document.getElementById('sentWeight').value = data.sentiment_weight;
+            document.getElementById('techWeightValue').textContent = data.technical_weight;
+            document.getElementById('sentWeightValue').textContent = data.sentiment_weight;
+            document.getElementById('rsiOversold').value = data.rsi_oversold;
+            document.getElementById('rsiOverbought').value = data.rsi_overbought;
+
+            // Load thresholds
+            document.getElementById('buyThreshold').value = data.buy_threshold || 0.3;
+            document.getElementById('sellThreshold').value = data.sell_threshold || -0.3;
+            document.getElementById('minConfirmations').value = data.min_confirmations || 2;
+
+        } catch (error) {
+            console.error('Error loading settings:', error);
+        }
+    }
+
+    async function saveThresholds() {
+        const btn = document.getElementById('saveThresholdsBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+        try {
+            const buyThreshold = parseFloat(document.getElementById('buyThreshold').value);
+            const sellThreshold = parseFloat(document.getElementById('sellThreshold').value);
+            const minConfirmations = parseInt(document.getElementById('minConfirmations').value);
+
+            // Validate
+            if (buyThreshold < 0 || buyThreshold > 1) {
+                throw new Error('Buy threshold must be between 0 and 1');
+            }
+            if (sellThreshold < -1 || sellThreshold > 0) {
+                throw new Error('Sell threshold must be between -1 and 0');
+            }
+            if (minConfirmations < 1 || minConfirmations > 4) {
+                throw new Error('Confirmations must be between 1 and 4');
+            }
+
+            const response = await fetchAPI('/api/settings/thresholds', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    buy_threshold: buyThreshold,
+                    sell_threshold: sellThreshold,
+                    min_confirmations: minConfirmations
+                })
+            });
+
+            showToast('Settings Saved', 'Signal thresholds have been updated', 'success');
+
+        } catch (error) {
+            showToast('Error', error.message || 'Failed to save settings', 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-check-lg me-1"></i> Save Thresholds';
+        }
+    }
+</script>
+{% endblock %}

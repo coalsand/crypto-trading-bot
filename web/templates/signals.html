@@ -1,0 +1,538 @@
+{% extends "base.html" %}
+
+{% block title %}Signals - Crypto Trading Bot{% endblock %}
+{% block page_title %}Trading Signals{% endblock %}
+
+{% block content %}
+<!-- Coin Analysis Section -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-search me-2"></i>Analyze Coin</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Select Coin</label>
+                    <select class="form-select" id="coinSelect" onchange="analyzeCoin()">
+                        <option value="">Choose a coin...</option>
+                    </select>
+                </div>
+                <div id="analysisResult" class="d-none">
+                    <hr>
+                    <h6 class="mb-3" id="analysisTitle">Analysis</h6>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <div class="p-2 bg-dark rounded">
+                                <small class="text-muted d-block">Current Price</small>
+                                <strong id="analysisPrice">--</strong>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 bg-dark rounded">
+                                <small class="text-muted d-block">Overall Score</small>
+                                <strong id="analysisScore">--</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-graph-up me-2"></i>Technical Indicators</h5>
+            </div>
+            <div class="card-body" id="technicalIndicators">
+                <p class="text-muted text-center mb-0">Select a coin to view technical analysis</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-chat-dots me-2"></i>Sentiment Analysis</h5>
+            </div>
+            <div class="card-body" id="sentimentIndicators">
+                <p class="text-muted text-center mb-0">Select a coin to view sentiment</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bullseye me-2"></i>Trade Setup</h5>
+            </div>
+            <div class="card-body" id="tradeSetup">
+                <p class="text-muted text-center mb-0">Select a coin to view trade setup</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Price Chart -->
+<div class="card mb-4 d-none" id="priceChartCard">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-graph-up-arrow me-2"></i>Price Chart - <span id="chartCoinName">--</span></h5>
+        <div class="btn-group btn-group-sm" role="group">
+            <button type="button" class="btn btn-outline-secondary active" onclick="changeTimeframe('1h')" id="tf1h">1H</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="changeTimeframe('4h')" id="tf4h">4H</button>
+            <button type="button" class="btn btn-outline-secondary" onclick="changeTimeframe('1d')" id="tf1d">1D</button>
+        </div>
+    </div>
+    <div class="card-body">
+        <canvas id="priceChart" height="250"></canvas>
+    </div>
+</div>
+
+<!-- Recent Signals Table -->
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-lightning me-2"></i>Signal History</h5>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadSignals()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Symbol</th>
+                        <th class="text-center">Signal</th>
+                        <th class="text-end">Technical</th>
+                        <th class="text-end">Sentiment</th>
+                        <th class="text-end">Combined</th>
+                        <th class="text-end">Strength</th>
+                        <th class="text-end">Confidence</th>
+                        <th class="text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="signalsTable">
+                    <tr>
+                        <td colspan="9" class="text-center text-muted py-4">
+                            <div class="spinner-border spinner-border-sm me-2"></div>
+                            Loading signals...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let priceChart = null;
+    let allSignals = [];
+    let currentTimeframe = '1h';
+    let selectedCoin = '';
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadCoins();
+        loadSignals();
+    });
+
+    async function loadCoins() {
+        try {
+            const data = await fetchAPI('/api/coins');
+            const select = document.getElementById('coinSelect');
+
+            for (const coin of data.coins.filter(c => c.tradeable)) {
+                const option = document.createElement('option');
+                option.value = coin.symbol;
+                option.textContent = `${coin.symbol} - ${coin.name}`;
+                select.appendChild(option);
+            }
+        } catch (error) {
+            console.error('Error loading coins:', error);
+        }
+    }
+
+    async function analyzeCoin() {
+        const symbol = document.getElementById('coinSelect').value;
+        selectedCoin = symbol;
+
+        // Re-render signals with filter
+        renderSignals();
+
+        if (!symbol) {
+            document.getElementById('analysisResult').classList.add('d-none');
+            document.getElementById('technicalIndicators').innerHTML =
+                '<p class="text-muted text-center mb-0">Select a coin to view technical analysis</p>';
+            document.getElementById('sentimentIndicators').innerHTML =
+                '<p class="text-muted text-center mb-0">Select a coin to view sentiment</p>';
+            document.getElementById('tradeSetup').innerHTML =
+                '<p class="text-muted text-center mb-0">Select a coin to view trade setup</p>';
+            document.getElementById('priceChartCard').classList.add('d-none');
+            return;
+        }
+
+        // Show and load price chart
+        document.getElementById('priceChartCard').classList.remove('d-none');
+        document.getElementById('chartCoinName').textContent = symbol;
+        loadPriceChart(symbol, currentTimeframe);
+
+        try {
+            const [technical, sentiment] = await Promise.all([
+                fetchAPI(`/api/technical/${symbol}`),
+                fetchAPI(`/api/sentiment/${symbol}`)
+            ]);
+
+            // Update analysis result
+            document.getElementById('analysisResult').classList.remove('d-none');
+            document.getElementById('analysisTitle').textContent = `${symbol} Analysis`;
+            document.getElementById('analysisPrice').textContent = formatCurrency(technical.current_price);
+
+            const score = technical.overall_score;
+            const scoreClass = score > 0.3 ? 'text-success' : score < -0.3 ? 'text-danger' : 'text-warning';
+            document.getElementById('analysisScore').innerHTML =
+                `<span class="${scoreClass}">${score.toFixed(3)}</span>`;
+
+            // Update technical indicators
+            document.getElementById('technicalIndicators').innerHTML = `
+                <div class="row g-2">
+                    <div class="col-6">
+                        <div class="indicator-item">
+                            <span class="indicator-label">RSI (14)</span>
+                            <span class="indicator-value ${getRsiClass(technical.rsi)}">${technical.rsi?.toFixed(2) || '--'}</span>
+                            <span class="indicator-signal">${technical.rsi_signal}</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="indicator-item">
+                            <span class="indicator-label">MACD</span>
+                            <span class="indicator-value">${technical.macd?.toFixed(4) || '--'}</span>
+                            <span class="indicator-signal">${technical.macd_signal}</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="indicator-item">
+                            <span class="indicator-label">BB Signal</span>
+                            <span class="indicator-value">${technical.bb_signal}</span>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="indicator-item">
+                            <span class="indicator-label">EMA Signal</span>
+                            <span class="indicator-value">${technical.ema_signal}</span>
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <hr class="my-2">
+                        <small class="text-muted">
+                            EMA 20: ${technical.ema_20?.toFixed(2) || '--'} |
+                            EMA 50: ${technical.ema_50?.toFixed(2) || '--'} |
+                            EMA 200: ${technical.ema_200?.toFixed(2) || '--'}
+                        </small>
+                    </div>
+                    <div class="col-12">
+                        <small class="text-muted">
+                            BB: ${technical.bb_lower?.toFixed(2) || '--'} - ${technical.bb_middle?.toFixed(2) || '--'} - ${technical.bb_upper?.toFixed(2) || '--'}
+                        </small>
+                    </div>
+                </div>
+            `;
+
+            // Update sentiment indicators
+            const sentScore = sentiment.overall_score;
+            const sentClass = sentScore > 0.2 ? 'text-success' : sentScore < -0.2 ? 'text-danger' : 'text-warning';
+
+            document.getElementById('sentimentIndicators').innerHTML = `
+                <div class="text-center mb-3">
+                    <h3 class="${sentClass}">${sentScore.toFixed(3)}</h3>
+                    <small class="text-muted">Overall Sentiment Score</small>
+                </div>
+                <div class="row g-2">
+                    <div class="col-4">
+                        <div class="text-center p-2 bg-dark rounded">
+                            <i class="bi bi-reddit fs-4 text-danger"></i>
+                            <div class="mt-1">${sentiment.reddit_score?.toFixed(3) || '--'}</div>
+                            <small class="text-muted">Reddit</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-center p-2 bg-dark rounded">
+                            <i class="bi bi-twitter-x fs-4 text-info"></i>
+                            <div class="mt-1">${sentiment.twitter_score?.toFixed(3) || '--'}</div>
+                            <small class="text-muted">Twitter</small>
+                        </div>
+                    </div>
+                    <div class="col-4">
+                        <div class="text-center p-2 bg-dark rounded">
+                            <i class="bi bi-newspaper fs-4 text-warning"></i>
+                            <div class="mt-1">${sentiment.news_score?.toFixed(3) || '--'}</div>
+                            <small class="text-muted">News</small>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2 text-center">
+                    <small class="text-muted">${sentiment.post_count} posts from ${sentiment.source_count} sources</small>
+                </div>
+            `;
+
+            // Update trade setup
+            const combinedScore = technical.overall_score * 0.6 + sentiment.overall_score * 0.4;
+            const signal = combinedScore > 0.5 ? 'BUY' : combinedScore < -0.5 ? 'SELL' : 'HOLD';
+            const signalClass = signal === 'BUY' ? 'bg-success' : signal === 'SELL' ? 'bg-danger' : 'bg-secondary';
+
+            const atr = technical.atr || 0;
+            const stopLoss = signal === 'BUY' ? technical.current_price - (atr * 2) : technical.current_price + (atr * 2);
+            const takeProfit = signal === 'BUY' ? technical.current_price + (atr * 6) : technical.current_price - (atr * 6);
+
+            document.getElementById('tradeSetup').innerHTML = `
+                <div class="text-center mb-3">
+                    <span class="badge ${signalClass} fs-5 px-4 py-2">${signal}</span>
+                </div>
+                <div class="row g-2">
+                    <div class="col-6">
+                        <div class="p-2 bg-dark rounded">
+                            <small class="text-muted d-block">Entry Price</small>
+                            <strong>${formatCurrency(technical.current_price)}</strong>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-2 bg-dark rounded">
+                            <small class="text-muted d-block">ATR (14)</small>
+                            <strong>${atr.toFixed(2)}</strong>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-2 bg-dark rounded">
+                            <small class="text-danger d-block">Stop Loss</small>
+                            <strong class="text-danger">${formatCurrency(stopLoss)}</strong>
+                        </div>
+                    </div>
+                    <div class="col-6">
+                        <div class="p-2 bg-dark rounded">
+                            <small class="text-success d-block">Take Profit</small>
+                            <strong class="text-success">${formatCurrency(takeProfit)}</strong>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2 text-center">
+                    <small class="text-muted">Risk/Reward: 1:3 | Position: 3-5%</small>
+                </div>
+            `;
+
+        } catch (error) {
+            console.error('Error analyzing coin:', error);
+            showToast('Error', 'Failed to analyze coin', 'danger');
+        }
+    }
+
+    function getRsiClass(rsi) {
+        if (!rsi) return '';
+        if (rsi < 30) return 'text-success';
+        if (rsi > 70) return 'text-danger';
+        return 'text-warning';
+    }
+
+    async function loadSignals() {
+        try {
+            const data = await fetchAPI('/api/signals');
+            allSignals = data.signals || [];
+            renderSignals();
+        } catch (error) {
+            console.error('Error loading signals:', error);
+        }
+    }
+
+    function renderSignals() {
+        // Filter signals by selected coin
+        let signals = allSignals;
+        if (selectedCoin) {
+            signals = allSignals.filter(s => s.symbol === selectedCoin);
+        }
+
+        if (signals.length === 0) {
+            document.getElementById('signalsTable').innerHTML = `
+                <tr>
+                    <td colspan="9" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        ${selectedCoin ? `No signals for ${selectedCoin}` : 'No signals generated yet'}
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        for (const signal of signals) {
+            const time = new Date(signal.timestamp).toLocaleString();
+            const signalClass = signal.type === 'buy' ? 'bg-success' :
+                               signal.type === 'sell' ? 'bg-danger' : 'bg-secondary';
+            const statusBadge = signal.executed ?
+                '<span class="badge bg-primary">Executed</span>' :
+                '<span class="badge bg-secondary">Pending</span>';
+
+            const techClass = signal.technical_score > 0.3 ? 'text-success' :
+                              signal.technical_score < -0.3 ? 'text-danger' : '';
+            const sentClass = signal.sentiment_score > 0.3 ? 'text-success' :
+                              signal.sentiment_score < -0.3 ? 'text-danger' : '';
+            const combClass = signal.combined_score > 0.3 ? 'text-success' :
+                              signal.combined_score < -0.3 ? 'text-danger' : '';
+
+            html += `
+                <tr>
+                    <td><small>${time}</small></td>
+                    <td><strong>${signal.symbol}</strong></td>
+                    <td class="text-center">
+                        <span class="badge ${signalClass}">${signal.type.toUpperCase()}</span>
+                    </td>
+                    <td class="text-end ${techClass}">${signal.technical_score.toFixed(3)}</td>
+                    <td class="text-end ${sentClass}">${signal.sentiment_score.toFixed(3)}</td>
+                    <td class="text-end ${combClass}">${signal.combined_score.toFixed(3)}</td>
+                    <td class="text-end">${(signal.strength * 100).toFixed(0)}%</td>
+                    <td class="text-end">${(signal.confidence * 100).toFixed(0)}%</td>
+                    <td class="text-center">${statusBadge}</td>
+                </tr>
+            `;
+        }
+
+        document.getElementById('signalsTable').innerHTML = html;
+        updateLastUpdate();
+    }
+
+    // ============================================
+    // Price Chart Functions
+    // ============================================
+    async function loadPriceChart(symbol, timeframe = '1h') {
+        try {
+            const data = await fetchAPI(`/api/ohlcv/${symbol}?timeframe=${timeframe}&limit=100`);
+
+            if (!data.ohlcv || data.ohlcv.length === 0) {
+                console.log('No OHLCV data available');
+                return;
+            }
+
+            const labels = data.ohlcv.map(c => {
+                const date = new Date(c.timestamp);
+                return timeframe === '1d' ? date.toLocaleDateString() : date.toLocaleTimeString();
+            });
+            const prices = data.ohlcv.map(c => c.close);
+            const highs = data.ohlcv.map(c => c.high);
+            const lows = data.ohlcv.map(c => c.low);
+
+            // Destroy existing chart
+            if (priceChart) {
+                priceChart.destroy();
+            }
+
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'Close Price',
+                            data: prices,
+                            borderColor: '#0d6efd',
+                            backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.1,
+                            pointRadius: 0,
+                            pointHoverRadius: 4
+                        },
+                        {
+                            label: 'High',
+                            data: highs,
+                            borderColor: 'rgba(25, 135, 84, 0.5)',
+                            borderWidth: 1,
+                            borderDash: [5, 5],
+                            fill: false,
+                            tension: 0.1,
+                            pointRadius: 0
+                        },
+                        {
+                            label: 'Low',
+                            data: lows,
+                            borderColor: 'rgba(220, 53, 69, 0.5)',
+                            borderWidth: 1,
+                            borderDash: [5, 5],
+                            fill: false,
+                            tension: 0.1,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: '#adb5bd',
+                                usePointStyle: true
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.dataset.label}: $${context.raw.toLocaleString()}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#adb5bd',
+                                maxTicksLimit: 10
+                            }
+                        },
+                        y: {
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#adb5bd',
+                                callback: function(value) {
+                                    return '$' + value.toLocaleString();
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+
+        } catch (error) {
+            console.error('Error loading price chart:', error);
+        }
+    }
+
+    function changeTimeframe(tf) {
+        currentTimeframe = tf;
+
+        // Update button states
+        document.querySelectorAll('[id^="tf"]').forEach(btn => btn.classList.remove('active'));
+        document.getElementById('tf' + tf).classList.add('active');
+
+        if (selectedCoin) {
+            loadPriceChart(selectedCoin, tf);
+        }
+    }
+</script>
+{% endblock %}

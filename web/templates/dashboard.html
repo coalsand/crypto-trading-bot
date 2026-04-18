@@ -1,0 +1,653 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Crypto Trading Bot{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Portfolio Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="stat-label">Portfolio Value</p>
+                        <h3 class="stat-value" id="portfolioValue">$0.00</h3>
+                    </div>
+                    <div class="stat-icon bg-primary bg-opacity-25">
+                        <i class="bi bi-wallet2 text-primary"></i>
+                    </div>
+                </div>
+                <p class="stat-change mt-2" id="portfolioChange">
+                    <span class="text-success">+0.00%</span> all time
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="stat-label">Cash Balance</p>
+                        <h3 class="stat-value" id="cashBalance">$0.00</h3>
+                    </div>
+                    <div class="stat-icon bg-success bg-opacity-25">
+                        <i class="bi bi-cash-stack text-success"></i>
+                    </div>
+                </div>
+                <p class="stat-change mt-2" id="positionsValue">
+                    <span>$0.00</span> in positions
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="stat-label">Unrealized P&L</p>
+                        <h3 class="stat-value" id="unrealizedPnl">$0.00</h3>
+                    </div>
+                    <div class="stat-icon bg-info bg-opacity-25">
+                        <i class="bi bi-graph-up text-info"></i>
+                    </div>
+                </div>
+                <p class="stat-change mt-2" id="openPositions">
+                    <span>0</span> open positions
+                </p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div>
+                        <p class="stat-label">Win Rate</p>
+                        <h3 class="stat-value" id="winRate">0%</h3>
+                    </div>
+                    <div class="stat-icon bg-warning bg-opacity-25">
+                        <i class="bi bi-trophy text-warning"></i>
+                    </div>
+                </div>
+                <p class="stat-change mt-2" id="totalTrades">
+                    <span>0</span> total trades
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content Row -->
+<div class="row g-3">
+    <!-- Prices & Signals -->
+    <div class="col-lg-8">
+        <!-- Price Table -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-currency-exchange me-2"></i>Market Prices</h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="refreshPrices()">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Coin</th>
+                                <th class="text-end">Price</th>
+                                <th class="text-end">Technical</th>
+                                <th class="text-end">Sentiment</th>
+                                <th class="text-center">Signal</th>
+                            </tr>
+                        </thead>
+                        <tbody id="pricesTable">
+                            <tr>
+                                <td colspan="5" class="text-center text-muted py-4">
+                                    <div class="spinner-border spinner-border-sm me-2"></div>
+                                    Loading prices...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Signals -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-lightning me-2"></i>Recent Signals</h5>
+                <a href="/signals" class="btn btn-sm btn-outline-primary">View All</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Coin</th>
+                                <th class="text-center">Signal</th>
+                                <th class="text-end">Score</th>
+                                <th class="text-end">Entry</th>
+                                <th class="text-center">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="signalsTable">
+                            <tr>
+                                <td colspan="6" class="text-center text-muted py-4">
+                                    <div class="spinner-border spinner-border-sm me-2"></div>
+                                    Loading signals...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sidebar Widgets -->
+    <div class="col-lg-4">
+        <!-- Bot Status -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-robot me-2"></i>Bot Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex align-items-center mb-3">
+                    <span class="status-indicator status-idle me-2" id="botStatusIndicator"></span>
+                    <span id="botStatusText">Idle</span>
+                </div>
+                <div class="mb-2">
+                    <small class="text-muted">Last Cycle:</small>
+                    <span class="ms-2" id="lastCycle">Never</span>
+                </div>
+                <div class="mb-3">
+                    <small class="text-muted">Cycles Run:</small>
+                    <span class="ms-2" id="cycleCount">0</span>
+                </div>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-primary" onclick="runCycle()" id="runCycleBtnMain">
+                        <i class="bi bi-play-fill me-1"></i> Run Trading Cycle
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="refreshSentiment()">
+                        <i class="bi bi-chat-dots me-1"></i> Refresh Sentiment
+                    </button>
+                </div>
+
+                <!-- Auto-Cycle Timer -->
+                <hr class="my-3">
+                <div class="mb-2">
+                    <small class="text-muted">Auto-Cycle Timer:</small>
+                    <span class="ms-2 badge" id="timerStatus">OFF</span>
+                </div>
+                <div class="input-group input-group-sm mb-2">
+                    <span class="input-group-text">Interval</span>
+                    <select class="form-select" id="timerInterval">
+                        <option value="1">1 min</option>
+                        <option value="5">5 min</option>
+                        <option value="15" selected>15 min</option>
+                        <option value="30">30 min</option>
+                        <option value="60">1 hour</option>
+                    </select>
+                </div>
+                <div class="d-grid gap-2">
+                    <button class="btn btn-success btn-sm" onclick="startAutoTimer()" id="startTimerBtn">
+                        <i class="bi bi-clock me-1"></i> Start Auto-Cycle
+                    </button>
+                    <button class="btn btn-danger btn-sm d-none" onclick="stopAutoTimer()" id="stopTimerBtn">
+                        <i class="bi bi-stop-fill me-1"></i> Stop Auto-Cycle
+                    </button>
+                </div>
+                <div class="text-center mt-2 d-none" id="nextCycleInfo">
+                    <small class="text-muted">Next cycle in: <span id="nextCycleCountdown">--:--</span></small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Open Positions -->
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="bi bi-briefcase me-2"></i>Open Positions</h5>
+                <a href="/positions" class="btn btn-sm btn-outline-primary">Details</a>
+            </div>
+            <div class="card-body" id="openPositionsList">
+                <p class="text-muted text-center mb-0">No open positions</p>
+            </div>
+        </div>
+
+        <!-- Performance -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Today's Performance</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Trades Opened</span>
+                    <span id="todayOpened">0</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Trades Closed</span>
+                    <span id="todayClosed">0</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2">
+                    <span class="text-muted">Win Rate</span>
+                    <span id="todayWinRate">0%</span>
+                </div>
+                <hr>
+                <div class="d-flex justify-content-between">
+                    <span class="text-muted">P&L</span>
+                    <span class="fw-bold" id="todayPnl">$0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Load dashboard data on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        loadDashboard();
+        // Refresh every 30 seconds
+        setInterval(loadDashboard, 30000);
+    });
+
+    async function loadDashboard() {
+        await Promise.all([
+            loadPortfolio(),
+            loadPrices(),
+            loadSignals(),
+            loadPositions(),
+            loadPerformance(),
+            loadBotStatus()
+        ]);
+        updateLastUpdate();
+    }
+
+    async function loadPortfolio() {
+        try {
+            const data = await fetchAPI('/api/portfolio');
+
+            document.getElementById('portfolioValue').textContent = formatCurrency(data.total_value);
+            document.getElementById('cashBalance').textContent = formatCurrency(data.cash_balance);
+            document.getElementById('unrealizedPnl').textContent = formatCurrency(data.unrealized_pnl);
+            document.getElementById('unrealizedPnl').className = 'stat-value ' +
+                (data.unrealized_pnl >= 0 ? 'text-success' : 'text-danger');
+
+            document.getElementById('positionsValue').innerHTML =
+                `<span>${formatCurrency(data.positions_value)}</span> in positions`;
+            document.getElementById('openPositions').innerHTML =
+                `<span>${data.open_positions}</span> open positions`;
+
+            const changeClass = data.total_pnl_pct >= 0 ? 'text-success' : 'text-danger';
+            const changeSign = data.total_pnl_pct >= 0 ? '+' : '';
+            document.getElementById('portfolioChange').innerHTML =
+                `<span class="${changeClass}">${changeSign}${data.total_pnl_pct.toFixed(2)}%</span> all time`;
+
+        } catch (error) {
+            console.error('Error loading portfolio:', error);
+        }
+    }
+
+    async function loadPrices() {
+        try {
+            const [pricesData, coinsData, signalsData] = await Promise.all([
+                fetchAPI('/api/prices'),
+                fetchAPI('/api/coins'),
+                fetchAPI('/api/signals')
+            ]);
+
+            const prices = pricesData.prices;
+            const coins = coinsData.coins.filter(c => c.tradeable);
+            const signals = signalsData.signals || [];
+
+            // Build a map of latest signal per coin
+            const latestSignals = {};
+            for (const sig of signals) {
+                if (!latestSignals[sig.symbol]) {
+                    latestSignals[sig.symbol] = sig;
+                }
+            }
+
+            let html = '';
+            for (const coin of coins) {
+                const price = prices[coin.symbol] || 0;
+                const sig = latestSignals[coin.symbol];
+
+                let techScore = sig ? sig.technical_score.toFixed(2) : '--';
+                let sentScore = sig ? sig.sentiment_score.toFixed(2) : '--';
+                let signalType = sig ? sig.type : 'hold';
+                let signalClass = signalType === 'buy' ? 'bg-success' :
+                                  signalType === 'sell' ? 'bg-danger' : 'bg-secondary';
+
+                html += `
+                    <tr>
+                        <td>
+                            <strong>${coin.symbol}</strong>
+                            <small class="text-muted d-block">${coin.name}</small>
+                        </td>
+                        <td class="text-end">${formatCurrency(price)}</td>
+                        <td class="text-end">${techScore}</td>
+                        <td class="text-end">${sentScore}</td>
+                        <td class="text-center">
+                            <span class="badge ${signalClass}">${signalType.toUpperCase()}</span>
+                        </td>
+                    </tr>
+                `;
+            }
+
+            document.getElementById('pricesTable').innerHTML = html || '<tr><td colspan="5" class="text-center text-muted">No data</td></tr>';
+
+        } catch (error) {
+            console.error('Error loading prices:', error);
+        }
+    }
+
+    async function loadSignals() {
+        try {
+            const data = await fetchAPI('/api/signals');
+            const signals = data.signals.slice(0, 10);
+
+            let html = '';
+            for (const signal of signals) {
+                const time = new Date(signal.timestamp).toLocaleTimeString();
+                const signalClass = signal.type === 'buy' ? 'bg-success' :
+                                   signal.type === 'sell' ? 'bg-danger' : 'bg-secondary';
+                const statusBadge = signal.executed ?
+                    '<span class="badge bg-primary">Executed</span>' :
+                    '<span class="badge bg-secondary">Pending</span>';
+
+                html += `
+                    <tr>
+                        <td><small>${time}</small></td>
+                        <td><strong>${signal.symbol}</strong></td>
+                        <td class="text-center">
+                            <span class="badge ${signalClass}">${signal.type.toUpperCase()}</span>
+                        </td>
+                        <td class="text-end">${signal.combined_score.toFixed(3)}</td>
+                        <td class="text-end">${signal.entry_price ? formatCurrency(signal.entry_price) : '--'}</td>
+                        <td class="text-center">${statusBadge}</td>
+                    </tr>
+                `;
+            }
+
+            document.getElementById('signalsTable').innerHTML = html ||
+                '<tr><td colspan="6" class="text-center text-muted py-3">No signals yet</td></tr>';
+
+        } catch (error) {
+            console.error('Error loading signals:', error);
+        }
+    }
+
+    async function loadPositions() {
+        try {
+            const data = await fetchAPI('/api/positions');
+            const positions = data.positions || [];
+
+            if (positions.length === 0) {
+                document.getElementById('openPositionsList').innerHTML =
+                    '<p class="text-muted text-center mb-0">No open positions</p>';
+                return;
+            }
+
+            let html = '';
+            for (const pos of positions) {
+                const pnlClass = pos.unrealized_pnl >= 0 ? 'text-success' : 'text-danger';
+                const pnlSign = pos.unrealized_pnl >= 0 ? '+' : '';
+
+                html += `
+                    <div class="position-item d-flex justify-content-between align-items-center mb-2 p-2 bg-dark rounded">
+                        <div>
+                            <strong>${pos.symbol}</strong>
+                            <small class="text-muted d-block">${pos.quantity.toFixed(6)}</small>
+                        </div>
+                        <div class="text-end">
+                            <span class="${pnlClass}">${pnlSign}${formatCurrency(pos.unrealized_pnl)}</span>
+                            <small class="text-muted d-block">${pnlSign}${pos.unrealized_pnl_pct.toFixed(2)}%</small>
+                        </div>
+                    </div>
+                `;
+            }
+
+            document.getElementById('openPositionsList').innerHTML = html;
+
+        } catch (error) {
+            console.error('Error loading positions:', error);
+        }
+    }
+
+    async function loadPerformance() {
+        try {
+            const data = await fetchAPI('/api/performance');
+
+            // All time metrics
+            document.getElementById('winRate').textContent =
+                (data.all_time.win_rate * 100).toFixed(1) + '%';
+            document.getElementById('totalTrades').innerHTML =
+                `<span>${data.all_time.total_trades}</span> total trades`;
+
+            // Today's metrics
+            document.getElementById('todayOpened').textContent = data.today.trades_opened;
+            document.getElementById('todayClosed').textContent = data.today.trades_closed;
+            document.getElementById('todayWinRate').textContent =
+                (data.today.win_rate * 100).toFixed(1) + '%';
+
+            const todayPnl = data.today.total_pnl;
+            const pnlClass = todayPnl >= 0 ? 'text-success' : 'text-danger';
+            document.getElementById('todayPnl').textContent = formatCurrency(todayPnl);
+            document.getElementById('todayPnl').className = 'fw-bold ' + pnlClass;
+
+        } catch (error) {
+            console.error('Error loading performance:', error);
+        }
+    }
+
+    async function loadBotStatus() {
+        try {
+            const data = await fetchAPI('/api/status');
+
+            const indicator = document.getElementById('botStatusIndicator');
+            const text = document.getElementById('botStatusText');
+
+            if (data.running) {
+                indicator.className = 'status-indicator status-running me-2';
+                text.textContent = 'Running...';
+            } else {
+                indicator.className = 'status-indicator status-idle me-2';
+                text.textContent = 'Idle';
+            }
+
+            document.getElementById('lastCycle').textContent =
+                data.last_cycle ? new Date(data.last_cycle).toLocaleString() : 'Never';
+            document.getElementById('cycleCount').textContent = data.cycle_count;
+
+            // Update trading mode badge
+            document.getElementById('tradingMode').innerHTML = data.paper_mode ?
+                '<i class="bi bi-file-earmark-text"></i> Paper Trading' :
+                '<i class="bi bi-exclamation-triangle"></i> LIVE Trading';
+            document.getElementById('tradingMode').className = data.paper_mode ?
+                'badge bg-warning text-dark' : 'badge bg-danger';
+
+        } catch (error) {
+            console.error('Error loading bot status:', error);
+        }
+    }
+
+    function refreshPrices() {
+        loadPrices();
+        showToast('Prices Refreshed', 'Market prices have been updated', 'success');
+    }
+
+    async function refreshSentiment() {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Refreshing...';
+
+        try {
+            const data = await fetchAPI('/api/refresh-sentiment', { method: 'POST' });
+            showToast('Sentiment Refreshed', `Reddit: ${data.results.reddit}, Twitter: ${data.results.twitter}, News: ${data.results.news}`, 'success');
+        } catch (error) {
+            showToast('Error', 'Failed to refresh sentiment', 'danger');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-chat-dots me-1"></i> Refresh Sentiment';
+        }
+    }
+
+    // ============================================
+    // Auto-Cycle Timer
+    // ============================================
+    let autoCycleTimer = null;
+    let countdownTimer = null;
+    let nextCycleTime = null;
+
+    function startAutoTimer(runImmediately = true) {
+        const intervalMinutes = parseInt(document.getElementById('timerInterval').value);
+        const intervalMs = intervalMinutes * 60 * 1000;
+
+        // Update UI
+        document.getElementById('startTimerBtn').classList.add('d-none');
+        document.getElementById('stopTimerBtn').classList.remove('d-none');
+        document.getElementById('timerInterval').disabled = true;
+        document.getElementById('timerStatus').textContent = 'ON';
+        document.getElementById('timerStatus').className = 'ms-2 badge bg-success';
+        document.getElementById('nextCycleInfo').classList.remove('d-none');
+
+        // Run immediately only if requested (not on restore)
+        if (runImmediately) {
+            runCycle();
+            nextCycleTime = Date.now() + intervalMs;
+            localStorage.setItem('autoCycleNextTime', nextCycleTime.toString());
+            showToast('Auto-Cycle Started', `Trading cycle will run every ${intervalMinutes} minute(s)`, 'success');
+        }
+
+        // Start the interval timer
+        autoCycleTimer = setInterval(() => {
+            runCycle();
+            nextCycleTime = Date.now() + intervalMs;
+            localStorage.setItem('autoCycleNextTime', nextCycleTime.toString());
+        }, intervalMs);
+
+        // Start countdown display
+        updateCountdown();
+        countdownTimer = setInterval(updateCountdown, 1000);
+
+        // Save state to localStorage
+        localStorage.setItem('autoCycleEnabled', 'true');
+        localStorage.setItem('autoCycleInterval', intervalMinutes.toString());
+    }
+
+    function stopAutoTimer() {
+        // Clear timers
+        if (autoCycleTimer) {
+            clearInterval(autoCycleTimer);
+            autoCycleTimer = null;
+        }
+        if (countdownTimer) {
+            clearInterval(countdownTimer);
+            countdownTimer = null;
+        }
+        nextCycleTime = null;
+
+        // Update UI
+        document.getElementById('startTimerBtn').classList.remove('d-none');
+        document.getElementById('stopTimerBtn').classList.add('d-none');
+        document.getElementById('timerInterval').disabled = false;
+        document.getElementById('timerStatus').textContent = 'OFF';
+        document.getElementById('timerStatus').className = 'ms-2 badge bg-secondary';
+        document.getElementById('nextCycleInfo').classList.add('d-none');
+        document.getElementById('nextCycleCountdown').textContent = '--:--';
+
+        // Clear localStorage
+        localStorage.removeItem('autoCycleEnabled');
+        localStorage.removeItem('autoCycleInterval');
+        localStorage.removeItem('autoCycleNextTime');
+
+        showToast('Auto-Cycle Stopped', 'Automatic trading cycles have been stopped', 'info');
+    }
+
+    function updateCountdown() {
+        if (!nextCycleTime) return;
+
+        const remaining = Math.max(0, nextCycleTime - Date.now());
+        const minutes = Math.floor(remaining / 60000);
+        const seconds = Math.floor((remaining % 60000) / 1000);
+
+        document.getElementById('nextCycleCountdown').textContent =
+            `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+        // Save current next time to localStorage for persistence
+        localStorage.setItem('autoCycleNextTime', nextCycleTime.toString());
+    }
+
+    // Restore auto-cycle state on page load
+    function restoreAutoCycleState() {
+        const enabled = localStorage.getItem('autoCycleEnabled') === 'true';
+        const interval = localStorage.getItem('autoCycleInterval');
+        const savedNextTime = localStorage.getItem('autoCycleNextTime');
+
+        if (enabled && interval) {
+            document.getElementById('timerInterval').value = interval;
+            const intervalMs = parseInt(interval) * 60 * 1000;
+
+            // Check if we have a saved next cycle time
+            if (savedNextTime) {
+                const savedTime = parseInt(savedNextTime);
+                const now = Date.now();
+
+                if (savedTime > now) {
+                    // Timer hasn't expired yet, resume countdown
+                    nextCycleTime = savedTime;
+                    const remainingMs = savedTime - now;
+
+                    // Update UI to show timer is running
+                    document.getElementById('startTimerBtn').classList.add('d-none');
+                    document.getElementById('stopTimerBtn').classList.remove('d-none');
+                    document.getElementById('timerInterval').disabled = true;
+                    document.getElementById('timerStatus').textContent = 'ON';
+                    document.getElementById('timerStatus').className = 'ms-2 badge bg-success';
+                    document.getElementById('nextCycleInfo').classList.remove('d-none');
+
+                    // Start countdown display
+                    updateCountdown();
+                    countdownTimer = setInterval(updateCountdown, 1000);
+
+                    // Set timeout for the remaining time, then start regular interval
+                    setTimeout(() => {
+                        runCycle();
+                        nextCycleTime = Date.now() + intervalMs;
+                        localStorage.setItem('autoCycleNextTime', nextCycleTime.toString());
+
+                        // Now start the regular interval
+                        autoCycleTimer = setInterval(() => {
+                            runCycle();
+                            nextCycleTime = Date.now() + intervalMs;
+                            localStorage.setItem('autoCycleNextTime', nextCycleTime.toString());
+                        }, intervalMs);
+                    }, remainingMs);
+
+                } else {
+                    // Timer expired while away, run a cycle and restart
+                    setTimeout(() => {
+                        startAutoTimer(true);
+                    }, 500);
+                }
+            } else {
+                // No saved time, start fresh
+                setTimeout(() => {
+                    startAutoTimer(true);
+                }, 500);
+            }
+        }
+    }
+
+    // Call on page load
+    restoreAutoCycleState();
+</script>
+{% endblock %}

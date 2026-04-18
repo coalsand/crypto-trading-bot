@@ -1,0 +1,44 @@
+# Crypto Trading Bot - Requirements
+# Install with: pip install -r requirements.txt
+
+# Exchange connectivity
+ccxt>=4.0.0
+
+# Data manipulation
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Technical analysis
+pandas-ta>=0.3.14b
+
+# Reddit API
+praw>=7.7.0
+
+# Twitter/X API
+tweepy>=4.14.0
+
+# NLP and sentiment analysis
+transformers>=4.35.0
+torch>=2.0.0
+sentencepiece>=0.1.99
+
+# Database
+sqlalchemy>=2.0.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# Task scheduling
+apscheduler>=3.10.0
+
+# HTTP requests
+requests>=2.31.0
+
+# RSS/XML parsing (included in stdlib, but list for clarity)
+# xml.etree.ElementTree (stdlib)
+
+# Web UI
+flask>=3.0.0
+
+# Utilities
+typing-extensions>=4.8.0

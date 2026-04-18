@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+
+{% block title %}Trade History - Crypto Trading Bot{% endblock %}
+{% block page_title %}Trade History{% endblock %}
+
+{% block content %}
+<!-- Performance Summary -->
+<div class="row g-3 mb-4">
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <p class="stat-label">Total Trades</p>
+                <h3 class="stat-value" id="totalTrades">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <p class="stat-label">Win Rate</p>
+                <h3 class="stat-value text-success" id="winRate">0%</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <p class="stat-label">Total P&L</p>
+                <h3 class="stat-value" id="totalPnl">$0.00</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <p class="stat-label">Avg Win</p>
+                <h3 class="stat-value text-success" id="avgWin">$0.00</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <p class="stat-label">Avg Loss</p>
+                <h3 class="stat-value text-danger" id="avgLoss">$0.00</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card">
+            <div class="card-body text-center">
+                <p class="stat-label">Profit Factor</p>
+                <h3 class="stat-value" id="profitFactor">0.00</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Time Period</label>
+                <select class="form-select" id="periodFilter" onchange="loadTrades()">
+                    <option value="7">Last 7 days</option>
+                    <option value="30" selected>Last 30 days</option>
+                    <option value="90">Last 90 days</option>
+                    <option value="365">Last year</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Status</label>
+                <select class="form-select" id="statusFilter" onchange="filterTrades()">
+                    <option value="all">All</option>
+                    <option value="open">Open</option>
+                    <option value="closed">Closed</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Symbol</label>
+                <select class="form-select" id="symbolFilter" onchange="filterTrades()">
+                    <option value="all">All Coins</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-outline-secondary w-100" onclick="loadTrades()">
+                    <i class="bi bi-arrow-clockwise me-1"></i> Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Trades Table -->
+<div class="card">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-clock-history me-2"></i>Trade History</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Symbol</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th class="text-end">Quantity</th>
+                        <th class="text-end">Entry</th>
+                        <th class="text-end">Exit</th>
+                        <th class="text-end">P&L</th>
+                        <th>Opened</th>
+                        <th>Closed</th>
+                    </tr>
+                </thead>
+                <tbody id="tradesTable">
+                    <tr>
+                        <td colspan="10" class="text-center text-muted py-4">
+                            <div class="spinner-border spinner-border-sm me-2"></div>
+                            Loading trades...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Performance by Asset -->
+<div class="card mt-4">
+    <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-bar-chart me-2"></i>Performance by Asset</h5>
+    </div>
+    <div class="card-body">
+        <div class="row" id="assetPerformance">
+            <p class="text-muted text-center">Loading...</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let allTrades = [];
+
+    document.addEventListener('DOMContentLoaded', function() {
+        loadCoinsFilter();
+        loadTrades();
+    });
+
+    async function loadCoinsFilter() {
+        try {
+            const data = await fetchAPI('/api/coins');
+            const select = document.getElementById('symbolFilter');
+
+            for (const coin of data.coins.filter(c => c.tradeable)) {
+                const option = document.createElement('option');
+                option.value = coin.symbol;
+                option.textContent = coin.symbol;
+                select.appendChild(option);
+            }
+        } catch (error) {
+            console.error('Error loading coins:', error);
+        }
+    }
+
+    async function loadTrades() {
+        try {
+            const days = document.getElementById('periodFilter').value;
+            const [tradesData, perfData] = await Promise.all([
+                fetchAPI(`/api/trades?days=${days}`),
+                fetchAPI('/api/performance')
+            ]);
+
+            allTrades = tradesData.trades || [];
+            const metrics = perfData.all_time;
+
+            // Update metrics
+            document.getElementById('totalTrades').textContent = metrics.total_trades;
+            document.getElementById('winRate').textContent = (metrics.win_rate * 100).toFixed(1) + '%';
+
+            const totalPnl = metrics.total_pnl;
+            document.getElementById('totalPnl').textContent = formatCurrency(totalPnl);
+            document.getElementById('totalPnl').className = 'stat-value ' +
+                (totalPnl >= 0 ? 'text-success' : 'text-danger');
+
+            document.getElementById('avgWin').textContent = formatCurrency(metrics.average_win);
+            document.getElementById('avgLoss').textContent = formatCurrency(metrics.average_loss);
+            document.getElementById('profitFactor').textContent = metrics.profit_factor.toFixed(2);
+
+            // Update asset performance
+            updateAssetPerformance(metrics.by_asset || {});
+
+            // Display filtered trades
+            filterTrades();
+
+        } catch (error) {
+            console.error('Error loading trades:', error);
+            showToast('Error', 'Failed to load trades', 'danger');
+        }
+    }
+
+    function filterTrades() {
+        const statusFilter = document.getElementById('statusFilter').value;
+        const symbolFilter = document.getElementById('symbolFilter').value;
+
+        let filtered = allTrades;
+
+        if (statusFilter !== 'all') {
+            filtered = filtered.filter(t => t.status === statusFilter);
+        }
+
+        if (symbolFilter !== 'all') {
+            filtered = filtered.filter(t => t.symbol === symbolFilter);
+        }
+
+        displayTrades(filtered);
+    }
+
+    function displayTrades(trades) {
+        if (trades.length === 0) {
+            document.getElementById('tradesTable').innerHTML = `
+                <tr>
+                    <td colspan="10" class="text-center text-muted py-5">
+                        <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                        No trades found
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        let html = '';
+        for (const trade of trades) {
+            const typeClass = trade.type === 'buy' ? 'bg-success' : 'bg-danger';
+            const statusClass = trade.status === 'open' ? 'bg-primary' :
+                               trade.status === 'closed' ? 'bg-secondary' : 'bg-warning';
+
+            const pnl = trade.pnl || 0;
+            const pnlClass = pnl >= 0 ? 'text-success' : 'text-danger';
+            const pnlSign = pnl >= 0 ? '+' : '';
+
+            const pnlPct = trade.pnl_pct || 0;
+
+            html += `
+                <tr>
+                    <td>#${trade.id}</td>
+                    <td><strong>${trade.symbol}</strong></td>
+                    <td><span class="badge ${typeClass}">${trade.type.toUpperCase()}</span></td>
+                    <td><span class="badge ${statusClass}">${trade.status.toUpperCase()}</span></td>
+                    <td class="text-end">${trade.quantity.toFixed(6)}</td>
+                    <td class="text-end">${formatCurrency(trade.entry_price)}</td>
+                    <td class="text-end">${trade.exit_price ? formatCurrency(trade.exit_price) : '--'}</td>
+                    <td class="text-end ${pnlClass}">
+                        ${trade.status === 'closed' ? `${pnlSign}${formatCurrency(pnl)}<br><small>${pnlSign}${pnlPct.toFixed(2)}%</small>` : '--'}
+                    </td>
+                    <td><small>${trade.opened_at ? new Date(trade.opened_at).toLocaleString() : '--'}</small></td>
+                    <td><small>${trade.closed_at ? new Date(trade.closed_at).toLocaleString() : '--'}</small></td>
+                </tr>
+            `;
+        }
+
+        document.getElementById('tradesTable').innerHTML = html;
+        updateLastUpdate();
+    }
+
+    function updateAssetPerformance(byAsset) {
+        if (Object.keys(byAsset).length === 0) {
+            document.getElementById('assetPerformance').innerHTML =
+                '<p class="text-muted text-center w-100">No performance data yet</p>';
+            return;
+        }
+
+        let html = '';
+        for (const [symbol, data] of Object.entries(byAsset)) {
+            const pnlClass = data.total_pnl >= 0 ? 'text-success' : 'text-danger';
+            const pnlSign = data.total_pnl >= 0 ? '+' : '';
+
+            html += `
+                <div class="col-md-3 col-sm-6 mb-3">
+                    <div class="p-3 bg-dark rounded">
+                        <h5 class="mb-2">${symbol}</h5>
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="text-muted">Trades</small>
+                            <span>${data.trades}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-1">
+                            <small class="text-muted">Win Rate</small>
+                            <span class="text-success">${(data.win_rate * 100).toFixed(0)}%</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <small class="text-muted">P&L</small>
+                            <span class="${pnlClass}">${pnlSign}${formatCurrency(data.total_pnl)}</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        document.getElementById('assetPerformance').innerHTML = html;
+    }
+</script>
+{% endblock %}
