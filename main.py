@@ -139,14 +139,14 @@ class TradingBot:
             logger.exception(f"Stock screener failed: {e}")
 
     def run_stock_cycle(self, current_prices: dict):
-        """Run signal generation + execution for the active stock list."""
+        """
+        Generate signals for the active stock list (always, so the UI has something to show),
+        and execute trades only during market hours.
+        """
         if not settings.enable_stocks:
             return
         if not self.active_stocks:
             logger.debug("Stock cycle: no active stocks; run the screener first")
-            return
-        if not is_market_open():
-            logger.debug("Stock cycle skipped: US equities market is closed")
             return
 
         try:
@@ -157,17 +157,27 @@ class TradingBot:
 
             stock_prices = stock_data.get_current_prices(self.active_stocks)
             combined_prices = {**current_prices, **stock_prices}
-            self.trader.update_portfolio_prices(combined_prices)
-            self.trader.check_and_close_positions(combined_prices)
 
+            # Signal generation — runs always so users can see recent stock signals
             signals = signal_generator.generate_all_signals(
                 bars,
                 symbols=list(bars.keys()),
                 asset_type="stock",
             )
             signal_generator.save_signals(signals)
-
             actionable = signal_generator.get_actionable_signals(signals)
+
+            # Execution + portfolio update — market-hours only
+            if not is_market_open():
+                logger.info(
+                    f"Stock cycle: generated {len(signals)} signals "
+                    f"({len(actionable)} actionable) — market closed, no trades executed"
+                )
+                return
+
+            self.trader.update_portfolio_prices(combined_prices)
+            self.trader.check_and_close_positions(combined_prices)
+
             logger.info(f"Stock cycle: {len(actionable)} actionable stock signals")
             for sig in actionable:
                 trade = self.trader.execute_signal(sig, combined_prices)

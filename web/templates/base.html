@@ -44,6 +44,12 @@
                 </a>
             </li>
             <li class="nav-item">
+                <a class="nav-link {% if request.endpoint == 'stocks_page' %}active{% endif %}" href="/stocks">
+                    <i class="bi bi-bank"></i>
+                    <span>Stocks</span>
+                </a>
+            </li>
+            <li class="nav-item">
                 <a class="nav-link {% if request.endpoint == 'history_page' %}active{% endif %}" href="/history">
                     <i class="bi bi-clock-history"></i>
                     <span>History</span>

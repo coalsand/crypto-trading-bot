@@ -121,6 +121,12 @@ def settings_page():
     return render_template("settings.html")
 
 
+@app.route("/stocks")
+def stocks_page():
+    """Stock watchlist page."""
+    return render_template("stocks.html")
+
+
 # ============================================
 # API Routes
 # ============================================
@@ -240,6 +246,57 @@ def api_prices():
     try:
         prices = market_data_fetcher.get_current_prices()
         return jsonify({"prices": prices})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/stocks/active")
+def api_stocks_active():
+    """
+    Return the active stock watchlist with the latest signal per ticker.
+
+    Derived from the DB: the most recent stock-type signal for each symbol in
+    the last 48 hours. The scheduler refreshes this daily via the screener.
+    """
+    try:
+        from ..storage.models import Signal
+        from ..config.stocks import is_market_open
+        from sqlalchemy import func
+        from datetime import timedelta
+
+        cutoff = datetime.utcnow() - timedelta(hours=48)
+        with db.get_session() as session:
+            subq = (
+                session.query(Signal.symbol, func.max(Signal.timestamp).label("ts"))
+                .filter(Signal.asset_type == "stock", Signal.timestamp >= cutoff)
+                .group_by(Signal.symbol)
+                .subquery()
+            )
+            rows = (
+                session.query(Signal)
+                .join(subq, (Signal.symbol == subq.c.symbol) & (Signal.timestamp == subq.c.ts))
+                .filter(Signal.asset_type == "stock")
+                .all()
+            )
+            symbols = [r.symbol for r in rows]
+            prices = stock_data.get_current_prices(symbols) if symbols else {}
+
+            rows_sorted = sorted(rows, key=lambda r: abs(r.combined_score or 0), reverse=True)
+            active = [
+                {
+                    "symbol": r.symbol,
+                    "price": prices.get(r.symbol),
+                    "signal_type": r.signal_type.value,
+                    "technical_score": r.technical_score,
+                    "combined_score": r.combined_score,
+                    "entry_price": r.entry_price,
+                    "stop_loss": r.stop_loss,
+                    "take_profit": r.take_profit,
+                    "last_signal_at": r.timestamp.isoformat(),
+                }
+                for r in rows_sorted
+            ]
+        return jsonify({"active": active, "market_open": is_market_open()})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

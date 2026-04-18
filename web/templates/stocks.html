@@ -1,0 +1,152 @@
+{% extends "base.html" %}
+
+{% block title %}Stocks - Crypto Trading Bot{% endblock %}
+{% block page_title %}Stock Watchlist{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="stat-label">Active Tickers</p>
+                <h3 class="stat-value" id="tickerCount">0</h3>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="stat-label">Market Status</p>
+                <h3 class="stat-value"><span id="marketStatus" class="badge bg-secondary">Unknown</span></h3>
+                <p class="stat-change mt-2"><small class="text-muted">US Equities (9:30–16:00 ET, Mon–Fri)</small></p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card stat-card">
+            <div class="card-body">
+                <p class="stat-label">Last Screener Run</p>
+                <h3 class="stat-value" id="lastScreenerRun">--</h3>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0"><i class="bi bi-bank me-2"></i>Active Stock Watchlist</h5>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadStocks()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th class="text-end">Price</th>
+                        <th class="text-end">Technical</th>
+                        <th class="text-end">Combined</th>
+                        <th class="text-center">Signal</th>
+                        <th class="text-end">Suggested Entry</th>
+                        <th class="text-end">Stop / Target</th>
+                        <th>Last Signal</th>
+                    </tr>
+                </thead>
+                <tbody id="stocksTable">
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <div class="spinner-border spinner-border-sm me-2"></div>
+                            Loading watchlist...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="mt-3 text-muted">
+    <small>
+        <i class="bi bi-info-circle"></i>
+        The scheduler re-screens the NASDAQ-100 once every 24h. Stock trades execute only during market hours;
+        outside of that, signals are generated but not executed. Sentiment analysis is crypto-only (MVP).
+    </small>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        loadStocks();
+        setInterval(loadStocks, 60000);
+    });
+
+    async function loadStocks() {
+        try {
+            const data = await fetchAPI('/api/stocks/active');
+            const active = data.active || [];
+
+            document.getElementById('tickerCount').textContent = active.length;
+
+            const marketEl = document.getElementById('marketStatus');
+            if (data.market_open) {
+                marketEl.textContent = 'OPEN';
+                marketEl.className = 'badge bg-success';
+            } else {
+                marketEl.textContent = 'CLOSED';
+                marketEl.className = 'badge bg-secondary';
+            }
+
+            const mostRecent = active.reduce((max, s) =>
+                (!max || s.last_signal_at > max) ? s.last_signal_at : max, null);
+            document.getElementById('lastScreenerRun').textContent =
+                mostRecent ? new Date(mostRecent).toLocaleString() : '--';
+
+            if (active.length === 0) {
+                document.getElementById('stocksTable').innerHTML = `
+                    <tr>
+                        <td colspan="8" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            No stock signals in the last 48 hours.
+                            <br><small>The screener runs daily; signals also regenerate each trading cycle.</small>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            let html = '';
+            for (const s of active) {
+                const sig = (s.signal_type || 'hold').toLowerCase();
+                const sigClass = sig === 'buy' ? 'bg-success' : sig === 'sell' ? 'bg-danger' : 'bg-secondary';
+                const techClass = s.technical_score >= 0 ? 'text-success' : 'text-danger';
+                const priceStr = (s.price !== null && s.price !== undefined) ? formatCurrency(s.price) : '--';
+                const entryStr = s.entry_price ? formatCurrency(s.entry_price) : '--';
+                const slStr = s.stop_loss ? formatCurrency(s.stop_loss) : '--';
+                const tpStr = s.take_profit ? formatCurrency(s.take_profit) : '--';
+                const ts = new Date(s.last_signal_at).toLocaleString();
+
+                html += `
+                    <tr>
+                        <td><strong>${s.symbol}</strong></td>
+                        <td class="text-end">${priceStr}</td>
+                        <td class="text-end ${techClass}">${s.technical_score.toFixed(3)}</td>
+                        <td class="text-end">${s.combined_score.toFixed(3)}</td>
+                        <td class="text-center"><span class="badge ${sigClass}">${sig.toUpperCase()}</span></td>
+                        <td class="text-end">${entryStr}</td>
+                        <td class="text-end"><small class="text-danger">${slStr}</small> / <small class="text-success">${tpStr}</small></td>
+                        <td><small>${ts}</small></td>
+                    </tr>
+                `;
+            }
+            document.getElementById('stocksTable').innerHTML = html;
+            updateLastUpdate();
+        } catch (error) {
+            console.error('Error loading stocks:', error);
+            showToast('Error', 'Failed to load stock watchlist', 'danger');
+        }
+    }
+</script>
+{% endblock %}
