@@ -145,11 +145,31 @@ def performance_page():
 
 @app.route("/api/status")
 def api_status():
-    """Get bot status."""
+    """
+    Bot status. The 'cycle_count' and 'last_cycle' are derived from portfolio snapshots
+    in the DB (written by the scheduler each cycle) so they reflect actual backend
+    activity — not just the web process's local counter.
+    """
+    # Real cycle data comes from the portfolio-snapshot table written by the scheduler
+    scheduler_cycles_total = 0
+    scheduler_last_cycle = None
+    try:
+        from ..storage.models import Portfolio
+        from sqlalchemy import func
+        with db.get_session() as session:
+            q = session.query(func.count(Portfolio.id), func.max(Portfolio.timestamp)).filter(
+                Portfolio.is_paper == True
+            ).one()
+            scheduler_cycles_total = int(q[0] or 0)
+            scheduler_last_cycle = q[1].isoformat() if q[1] else None
+    except Exception as e:
+        logger.warning(f"status: could not read scheduler cycle count: {e}")
+
     return jsonify({
         "running": bot_state["running"],
-        "last_cycle": bot_state["last_cycle"],
-        "cycle_count": bot_state["cycle_count"],
+        "last_cycle": scheduler_last_cycle or bot_state["last_cycle"],
+        "cycle_count": scheduler_cycles_total,
+        "web_manual_cycles": bot_state["cycle_count"],
         "paper_mode": settings.paper_trading,
         "errors": bot_state["errors"][-5:]
     })
